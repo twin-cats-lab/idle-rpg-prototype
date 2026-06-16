@@ -522,13 +522,13 @@ function renderHomePartyCard(party) {
     const canDepart = !adventure && party.memberIds.length > 0;
 
     return `
-        <article class="home-party-card">
+        <article class="home-party-card" data-home-party-card="${party.id}">
             <div class="card-title-row">
                 <div>
                     <h3>${party.name}</h3>
                     <p>${namesFromIds(gameData.characters, party.memberIds)}</p>
                 </div>
-                <span class="tag">${status}</span>
+                <span class="tag" data-home-party-status="${party.id}">${status}</span>
             </div>
             <dl class="detail-list">
                 <div><dt>現在地</dt><dd>${dungeon ? dungeon.name : "街"}</dd></div>
@@ -542,20 +542,11 @@ function renderHomePartyCard(party) {
 function renderHomeAdventureAction(adventure, dungeon) {
     const returned = Date.now() >= adventure.returnAt;
 
-    if (returned) {
-        return `
-            <div class="home-action-area">
-                <div class="big-timer">帰還済み</div>
-                <p>${dungeon.name}の報酬を受け取れます。</p>
-                <button class="primary-button touch-button" type="button" data-action="claim-reward" data-adventure-id="${adventure.id}">帰還・報酬受取</button>
-            </div>
-        `;
-    }
-
     return `
         <div class="home-action-area">
-            <div class="big-timer">${remainingTimeText(adventure.returnAt)}</div>
-            <p>${new Date(adventure.returnAt).toLocaleTimeString("ja-JP")} 帰還予定</p>
+            <div class="big-timer" data-countdown-return-at="${adventure.returnAt}" data-party-id="${adventure.partyId}">${returned ? "帰還済み" : remainingTimeText(adventure.returnAt)}</div>
+            <p data-home-adventure-note="${adventure.partyId}">${returned ? `${dungeon.name}の報酬を受け取れます。` : `${new Date(adventure.returnAt).toLocaleTimeString("ja-JP")} 帰還予定`}</p>
+            <button class="primary-button touch-button ${returned ? "" : "is-hidden"}" type="button" data-action="claim-reward" data-adventure-id="${adventure.id}" data-claim-button-party-id="${adventure.partyId}">帰還・報酬受取</button>
         </div>
     `;
 }
@@ -974,6 +965,38 @@ function renderCurrentView() {
     renderers[currentView]();
 }
 
+function updateTimers() {
+    document.querySelectorAll("[data-countdown-return-at]").forEach((timerElement) => {
+        const returnAt = Number(timerElement.dataset.countdownReturnAt);
+        const partyId = timerElement.dataset.partyId;
+
+        if (!returnAt || !partyId) {
+            return;
+        }
+
+        const returned = Date.now() >= returnAt;
+        timerElement.textContent = returned ? "帰還済み" : remainingTimeText(returnAt);
+
+        const statusElement = document.querySelector(`[data-home-party-status="${partyId}"]`);
+        const noteElement = document.querySelector(`[data-home-adventure-note="${partyId}"]`);
+        const claimButton = document.querySelector(`[data-claim-button-party-id="${partyId}"]`);
+        const adventure = partyAdventure(partyId);
+        const dungeon = adventure ? byId(gameData.dungeons, adventure.dungeonId) : null;
+
+        if (statusElement) {
+            statusElement.textContent = returned ? "帰還済み" : "冒険中";
+        }
+
+        if (returned && noteElement && dungeon) {
+            noteElement.textContent = `${dungeon.name}の報酬を受け取れます。`;
+        }
+
+        if (claimButton) {
+            claimButton.classList.toggle("is-hidden", !returned);
+        }
+    });
+}
+
 navButtons.forEach((button) => {
     button.addEventListener("click", () => switchView(button.dataset.view));
 });
@@ -1050,7 +1073,12 @@ loadState();
 switchView("home");
 
 setInterval(() => {
-    if (currentView === "home" || currentView === "parties" || currentView === "adventure") {
+    if (currentView === "home") {
+        updateTimers();
+        return;
+    }
+
+    if (currentView === "parties" || currentView === "adventure") {
         renderCurrentView();
     }
 }, 1000);
