@@ -11,6 +11,28 @@ const gameData = {
         { id: "shaman", name: "祈祷師", tier: "基本職", bonusStat: "回復", note: "回復と支援を担当する。" },
         { id: "hunter", name: "狩人", tier: "基本職", bonusStat: "命中", note: "命中と種族対策に長ける。" }
     ],
+    skills: [
+        { id: "attack", name: "たたかう", type: "active", jobId: "rookie", learnLevel: 1, note: "基本攻撃。" },
+        { id: "brace", name: "身構える", type: "active", jobId: "rookie", learnLevel: 1, note: "守りを固める。" },
+        { id: "first-aid", name: "応急手当", type: "active", jobId: "rookie", learnLevel: 1, note: "軽い傷を手当てする。" },
+        { id: "power-strike", name: "強打", type: "active", jobId: "fighter", learnLevel: 5, note: "力を込めた一撃。" },
+        { id: "shield-bash", name: "盾打ち", type: "active", jobId: "guardian", learnLevel: 5, note: "盾で押し返す。" },
+        { id: "quick-step", name: "早駆け", type: "active", jobId: "scout", learnLevel: 5, note: "素早く踏み込む。" },
+        { id: "spark", name: "火花", type: "active", jobId: "mage", learnLevel: 5, note: "小さな魔法攻撃。" },
+        { id: "emergency-prayer", name: "応急祈祷", type: "active", jobId: "shaman", learnLevel: 5, note: "祈りで立て直す。" },
+        { id: "aimed-shot", name: "狙い撃ち", type: "active", jobId: "hunter", learnLevel: 5, note: "狙いを定めた射撃。" },
+        { id: "steady-breath", name: "深呼吸", type: "passive", jobId: "rookie", learnLevel: 1, note: "落ち着いて行動する。" },
+        { id: "tough-body", name: "鍛えた体", type: "passive", jobId: "fighter", learnLevel: 5, note: "攻撃役として踏みとどまる。" },
+        { id: "iron-stance", name: "鉄の構え", type: "passive", jobId: "guardian", learnLevel: 5, note: "防御姿勢を崩しにくい。" },
+        { id: "trail-sense", name: "痕跡読み", type: "passive", jobId: "scout", learnLevel: 5, note: "探索の勘を働かせる。" },
+        { id: "mana-focus", name: "魔力集中", type: "passive", jobId: "mage", learnLevel: 5, note: "魔力の流れを整える。" },
+        { id: "gentle-prayer", name: "静かな祈り", type: "passive", jobId: "shaman", learnLevel: 5, note: "支援の祈りを保つ。" },
+        { id: "beast-eye", name: "獣の目", type: "passive", jobId: "hunter", learnLevel: 5, note: "獲物の動きを読む。" }
+    ],
+    skillBooks: [
+        { id: "book-power-strike", name: "強打の書", skillId: "power-strike", implemented: false },
+        { id: "book-emergency-prayer", name: "応急祈祷の書", skillId: "emergency-prayer", implemented: false }
+    ],
     personalities: [
         { id: "diligent", name: "努力家", tendency: "修行" },
         { id: "careful", name: "慎重", tendency: "安全" },
@@ -78,6 +100,7 @@ let currentView = "home";
 let selectedCharacterId = "chara-01";
 let selectedPartyId = "party-01";
 let homeDungeonSelections = {};
+let lastAdventureReport = null;
 let gameState = createInitialState();
 
 const byId = (collection, id) => collection.find((item) => item.id === id);
@@ -125,9 +148,46 @@ function normalizeMastery(savedMastery = {}) {
     return mastery;
 }
 
+function skillById(skillId) {
+    return gameData.skills.find((skill) => skill.id === skillId);
+}
+
+function defaultLearnedSkillIds() {
+    return gameData.skills
+        .filter((skill) => skill.jobId === ROOKIE_JOB_ID && skill.learnLevel <= 1)
+        .map((skill) => skill.id);
+}
+
+function uniqueSkillIds(skillIds) {
+    return [...new Set((skillIds ?? []).filter((skillId) => skillById(skillId)))];
+}
+
+function normalizeEquippedSkills(equippedSkills = {}, learnedSkillIds = defaultLearnedSkillIds()) {
+    const learned = new Set(learnedSkillIds);
+    const active = uniqueSkillIds(equippedSkills.active ?? [])
+        .filter((skillId) => learned.has(skillId) && skillById(skillId)?.type === "active")
+        .slice(0, 3);
+    const passive = uniqueSkillIds(equippedSkills.passive ?? [])
+        .filter((skillId) => learned.has(skillId) && skillById(skillId)?.type === "passive")
+        .slice(0, 3);
+
+    return { active, passive };
+}
+
+function normalizeSkillState(character, savedCharacter = {}) {
+    const learnedSkillIds = uniqueSkillIds([
+        ...defaultLearnedSkillIds(),
+        ...(savedCharacter.learnedSkillIds ?? character.learnedSkillIds ?? [])
+    ]);
+
+    character.learnedSkillIds = learnedSkillIds;
+    character.equippedSkills = normalizeEquippedSkills(savedCharacter.equippedSkills ?? character.equippedSkills, learnedSkillIds);
+}
+
 function createInitialState() {
     gameData.characters.forEach((character) => {
         character.jobMastery = normalizeMastery(character.jobMastery);
+        normalizeSkillState(character);
     });
 
     return {
@@ -163,6 +223,7 @@ function loadState() {
             character.totalExperience = Number(savedCharacter.totalExperience) || 0;
             character.jobId = byId(gameData.jobs, savedCharacter.jobId) ? savedCharacter.jobId : character.jobId;
             character.jobMastery = normalizeMastery(savedCharacter.jobMastery);
+            normalizeSkillState(character, savedCharacter);
         });
     }
 
@@ -206,7 +267,9 @@ function saveState() {
                 experience: character.experience,
                 totalExperience: character.totalExperience,
                 jobId: character.jobId,
-                jobMastery: character.jobMastery
+                jobMastery: character.jobMastery,
+                learnedSkillIds: character.learnedSkillIds,
+                equippedSkills: character.equippedSkills
             })),
             parties: gameData.parties.map((party) => ({
                 id: party.id,
@@ -247,6 +310,33 @@ function masteryBonusText(jobId, masteryValue) {
 
 function masteryValue(character, jobId) {
     return character.jobMastery?.[jobId] ?? 0;
+}
+
+function skillName(skillId) {
+    return skillById(skillId)?.name ?? "未設定";
+}
+
+function learnedSkills(character, type) {
+    return (character.learnedSkillIds ?? [])
+        .map((skillId) => skillById(skillId))
+        .filter((skill) => skill && (!type || skill.type === type));
+}
+
+function equippedSkillNames(character, type) {
+    const skillIds = character.equippedSkills?.[type] ?? [];
+    return skillIds.length > 0 ? skillIds.map(skillName).join("、") : "未設定";
+}
+
+function learnEligibleSkills(character) {
+    normalizeSkillState(character);
+    const learned = new Set(character.learnedSkillIds);
+    const newlyLearned = gameData.skills.filter((skill) => {
+        return skill.jobId === character.jobId && skill.learnLevel <= character.level && !learned.has(skill.id);
+    });
+
+    newlyLearned.forEach((skill) => character.learnedSkillIds.push(skill.id));
+
+    return newlyLearned;
 }
 
 function personalityNames(ids) {
@@ -339,6 +429,54 @@ function addLog(message) {
     gameState.logs = [`${timestamp} ${message}`, ...gameState.logs].slice(0, 12);
 }
 
+function partyLogName(party) {
+    const index = gameData.parties.findIndex((item) => item.id === party.id);
+    return `第${index + 1}パーティ・${party.name}`;
+}
+
+function personalityComment(character) {
+    const comments = {
+        careful: "足跡を確認しながら進んだ",
+        bold: "先頭を切って踏み込んだ",
+        diligent: "地図に細かく印をつけた",
+        curious: "壁際の小物まで見逃さなかった",
+        kind: "仲間の息を整えながら進んだ"
+    };
+    const personalityId = character?.personalities?.find((id) => comments[id]);
+    return personalityId ? comments[personalityId] : "周囲を確かめながら進んだ";
+}
+
+function adventureItemName(dungeonId) {
+    return dungeonId === "ruins" ? "水路の古銭" : "森露の小瓶";
+}
+
+function createAdventureReport(party, dungeon, levelMessages) {
+    const leader = byId(gameData.characters, party.leaderId) ?? byId(gameData.characters, party.memberIds[0]);
+    const members = party.memberIds.map((id) => byId(gameData.characters, id)).filter(Boolean);
+    const roomActors = [leader, ...members.filter((member) => member.id !== leader?.id)];
+    const itemName = adventureItemName(dungeon.id);
+
+    return {
+        partyName: party.name,
+        leaderName: leader?.name ?? party.name,
+        dungeonName: dungeon.name,
+        experience: dungeon.reward.experience,
+        mastery: dungeon.reward.mastery,
+        gold: dungeon.reward.gold,
+        itemName,
+        levelMessages,
+        currentStep: 0,
+        steps: [
+            { badge: "出発", text: `${party.name}は${dungeon.name}へ向けて街を出た。` },
+            { badge: "到着", text: `${leader?.name ?? "リーダー"}が入口の様子を見て、進む順番を決めた。` },
+            { badge: "1部屋目", text: `${roomActors[0]?.name ?? "仲間"}は${personalityComment(roomActors[0])}。` },
+            { badge: "2部屋目", text: `${roomActors[1]?.name ?? "仲間"}は${personalityComment(roomActors[1] ?? roomActors[0])}。` },
+            { badge: "最終部屋", text: `${roomActors[2]?.name ?? "全員"}は小さな宝箱を見つけ、${itemName}を持ち帰った。` },
+            { badge: "帰還", text: `${party.name}は無事に帰還した。報酬を整理しよう。` }
+        ]
+    };
+}
+
 function startAdventure(partyId, dungeonId) {
     if (partyAdventure(partyId)) {
         return;
@@ -360,7 +498,7 @@ function startAdventure(partyId, dungeonId) {
         returnAt: now + dungeon.durationSeconds * 1000
     });
 
-    addLog(`${party.name}が${dungeon.name}へ出発しました。`);
+    addLog(`${partyLogName(party)}が${dungeon.name}へ出発しました。`);
     saveState();
     renderCurrentView();
 }
@@ -380,6 +518,7 @@ function claimReward(adventureId) {
     }
 
     const levelMessages = [];
+    const skillMessages = [];
     party.memberIds.forEach((characterId) => {
         const character = byId(gameData.characters, characterId);
 
@@ -387,6 +526,7 @@ function claimReward(adventureId) {
             return;
         }
 
+        normalizeSkillState(character);
         character.experience += dungeon.reward.experience;
         character.totalExperience += dungeon.reward.experience;
         character.jobMastery[character.jobId] = (character.jobMastery[character.jobId] ?? 0) + dungeon.reward.mastery;
@@ -395,14 +535,21 @@ function claimReward(adventureId) {
             character.experience -= expToNextLevel(character.level);
             character.level += 1;
             levelMessages.push(`${character.name} Lv${character.level}`);
+            const newSkills = learnEligibleSkills(character);
+            newSkills.forEach((skill) => skillMessages.push(`${character.name}: ${skill.name}`));
         }
     });
 
     gameState.gold += dungeon.reward.gold;
     gameState.adventures = gameState.adventures.filter((item) => item.id !== adventureId);
 
-    const rewardMessage = `${party.name}が${dungeon.name}から帰還。経験値${dungeon.reward.experience}、熟練度${dungeon.reward.mastery}、${dungeon.reward.gold}Gを獲得しました。`;
-    addLog(levelMessages.length > 0 ? `${rewardMessage} レベルアップ: ${levelMessages.join("、")}` : rewardMessage);
+    const rewardMessage = `${partyLogName(party)}が${dungeon.name}から帰還。経験値${dungeon.reward.experience}、熟練度${dungeon.reward.mastery}、${dungeon.reward.gold}Gを獲得しました。`;
+    lastAdventureReport = createAdventureReport(party, dungeon, levelMessages);
+    const growthMessages = [
+        levelMessages.length > 0 ? `レベルアップ: ${levelMessages.join("、")}` : "",
+        skillMessages.length > 0 ? `スキル習得: ${skillMessages.join("、")}` : ""
+    ].filter(Boolean).join(" / ");
+    addLog(growthMessages ? `${rewardMessage} ${growthMessages}` : rewardMessage);
     saveState();
     renderCurrentView();
 }
@@ -463,8 +610,44 @@ function changeJob(characterId, jobId) {
     const previousJobName = jobName(character.jobId);
     character.jobId = jobId;
     character.jobMastery = normalizeMastery(character.jobMastery);
+    const newSkills = learnEligibleSkills(character);
 
-    addLog(`${character.name}が${previousJobName}から${targetJob.name}へ転職しました。`);
+    addLog(`${character.name}が${previousJobName}から${targetJob.name}へ転職しました。${newSkills.length > 0 ? ` スキル習得: ${newSkills.map((skill) => skill.name).join("、")}` : ""}`);
+    saveState();
+    renderCurrentView();
+}
+
+function changeSkill(characterId, type, slotIndex, skillId) {
+    const character = byId(gameData.characters, characterId);
+
+    if (!character || !["active", "passive"].includes(type)) {
+        return;
+    }
+
+    normalizeSkillState(character);
+    const index = Number(slotIndex);
+
+    if (!Number.isInteger(index) || index < 0 || index > 2) {
+        return;
+    }
+
+    const skill = skillId ? skillById(skillId) : null;
+
+    if (skillId && (!skill || skill.type !== type || !character.learnedSkillIds.includes(skillId))) {
+        renderCurrentView();
+        return;
+    }
+
+    const equipped = [...(character.equippedSkills[type] ?? [])];
+    const otherEquipped = equipped.filter((id, currentIndex) => currentIndex !== index);
+
+    if (skillId && otherEquipped.includes(skillId)) {
+        renderCurrentView();
+        return;
+    }
+
+    equipped[index] = skillId || undefined;
+    character.equippedSkills[type] = uniqueSkillIds(equipped).filter((id) => skillById(id)?.type === type).slice(0, 3);
     saveState();
     renderCurrentView();
 }
@@ -474,22 +657,26 @@ function renderHome() {
     const returnedCount = gameState.adventures.length - activeCount;
 
     app.innerHTML = `
-        <section class="hero-panel">
-            <div>
-                <p class="eyebrow">放置RPG 管理画面</p>
-                <h2>冒険者たちの準備状況</h2>
-                <p>出発、待機、帰還、報酬受取までの最小ループが動く状態です。進行状況はブラウザに保存されます。</p>
-            </div>
-            <div class="summary-grid">
-                ${summaryItem("キャラクター", `${gameData.characters.length} / 20`)}
-                ${summaryItem("パーティ", `${gameData.parties.length} / 10`)}
-                ${summaryItem("所持ゴールド", `${gameState.gold} G`)}
-                ${summaryItem("帰還済み", `${returnedCount} 件`)}
-                ${summaryItem("冒険中", `${activeCount} 件`)}
-                ${summaryItem("ダンジョン", `${gameData.dungeons.length} 件`)}
-            </div>
-        </section>
         ${renderHomePartyStatus()}
+        ${renderAdventureReport()}
+        <details class="home-summary-details">
+            <summary>冒険者の準備状況</summary>
+            <section class="hero-panel compact-summary-panel">
+                <div>
+                    <p class="eyebrow">放置RPG 管理画面</p>
+                    <h2>準備状況</h2>
+                    <p>進行状況はブラウザに保存されます。</p>
+                </div>
+                <div class="summary-grid">
+                    ${summaryItem("キャラクター", `${gameData.characters.length} / 20`)}
+                    ${summaryItem("パーティ", `${gameData.parties.length} / 10`)}
+                    ${summaryItem("所持ゴールド", `${gameState.gold} G`)}
+                    ${summaryItem("帰還済み", `${returnedCount} 件`)}
+                    ${summaryItem("冒険中", `${activeCount} 件`)}
+                    ${summaryItem("ダンジョン", `${gameData.dungeons.length} 件`)}
+                </div>
+            </section>
+        </details>
         ${renderLogPanel()}
     `;
 }
@@ -526,14 +713,15 @@ function renderHomePartyCard(party) {
             <div class="card-title-row">
                 <div>
                     <h3>${party.name}</h3>
-                    <p>${namesFromIds(gameData.characters, party.memberIds)}</p>
+                    <p class="home-party-meta">${namesFromIds(gameData.characters, party.memberIds)}</p>
                 </div>
                 <span class="tag" data-home-party-status="${party.id}">${status}</span>
             </div>
-            <dl class="detail-list">
-                <div><dt>現在地</dt><dd>${dungeon ? dungeon.name : "街"}</dd></div>
-                <div><dt>方針</dt><dd>${partyPolicy(party)}</dd></div>
-            </dl>
+            <div class="mini-meta">
+                <span>${dungeon ? dungeon.name : "街"}</span>
+                <span>${partyPolicy(party)}</span>
+                <span>${party.memberIds.length}名</span>
+            </div>
             ${adventure ? renderHomeAdventureAction(adventure, dungeon) : renderHomeDepartAction(party, canDepart)}
         </article>
     `;
@@ -546,7 +734,7 @@ function renderHomeAdventureAction(adventure, dungeon) {
         <div class="home-action-area">
             <div class="big-timer" data-countdown-return-at="${adventure.returnAt}" data-party-id="${adventure.partyId}">${returned ? "帰還済み" : remainingTimeText(adventure.returnAt)}</div>
             <p data-home-adventure-note="${adventure.partyId}">${returned ? `${dungeon.name}の報酬を受け取れます。` : `${new Date(adventure.returnAt).toLocaleTimeString("ja-JP")} 帰還予定`}</p>
-            <button class="primary-button touch-button ${returned ? "" : "is-hidden"}" type="button" data-action="claim-reward" data-adventure-id="${adventure.id}" data-claim-button-party-id="${adventure.partyId}">帰還・報酬受取</button>
+            <button class="primary-button touch-button return-button ${returned ? "" : "is-hidden"}" type="button" data-action="claim-reward" data-adventure-id="${adventure.id}" data-claim-button-party-id="${adventure.partyId}">帰還・報酬受取</button>
         </div>
     `;
 }
@@ -564,9 +752,60 @@ function renderHomeDepartAction(party, canDepart) {
                     `).join("")}
                 </select>
             </label>
-            <button class="primary-button touch-button" type="button" data-action="home-start-adventure" data-party-id="${party.id}" ${canDepart ? "" : "disabled"}>出発</button>
+            <button class="primary-button touch-button depart-button" type="button" data-action="home-start-adventure" data-party-id="${party.id}" ${canDepart ? "" : "disabled"}>出発</button>
             ${party.memberIds.length === 0 ? `<p class="notice">メンバーがいないため出発できません。</p>` : ""}
         </div>
+    `;
+}
+
+function renderAdventureReport() {
+    if (!lastAdventureReport) {
+        return "";
+    }
+
+    const report = lastAdventureReport;
+    const visibleSteps = report.steps.slice(0, report.currentStep + 1);
+    const isComplete = report.currentStep >= report.steps.length - 1;
+
+    return `
+        <section class="adventure-report-panel">
+            <div class="card-title-row">
+                <div>
+                    <p class="eyebrow">Return Report</p>
+                    <h2>${report.leaderName}率いるパーティの帰還ログ</h2>
+                </div>
+                <span class="log-badge badge-return">帰還</span>
+            </div>
+            <ol class="room-log-list">
+                ${visibleSteps.map((step) => `
+                    <li>
+                        <span class="log-badge">${step.badge}</span>
+                        <p>${step.text}</p>
+                    </li>
+                `).join("")}
+            </ol>
+            ${isComplete ? renderAdventureReportResult(report) : `
+                <div class="report-actions">
+                    <button class="secondary-button touch-button" type="button" data-action="next-report-step">次の部屋へ</button>
+                    <button class="primary-button touch-button" type="button" data-action="show-report-result">結果だけ見る</button>
+                </div>
+            `}
+        </section>
+    `;
+}
+
+function renderAdventureReportResult(report) {
+    return `
+        <section class="result-summary">
+            <h3>冒険結果</h3>
+            <dl class="detail-list two-column">
+                <div><dt>経験値</dt><dd>${report.experience}</dd></div>
+                <div><dt>熟練度</dt><dd>${report.mastery}</dd></div>
+                <div><dt>ゴールド</dt><dd>${report.gold}G</dd></div>
+                <div><dt>入手アイテム</dt><dd>${report.itemName}</dd></div>
+                <div><dt>Lvアップ</dt><dd>${report.levelMessages.length > 0 ? report.levelMessages.join("、") : "なし"}</dd></div>
+            </dl>
+        </section>
     `;
 }
 
@@ -605,6 +844,7 @@ function renderCharacterListCard(character) {
 
 function renderCharacterDetail(character) {
     const party = partyForCharacter(character.id);
+    normalizeSkillState(character);
 
     return `
         <article class="wide-card detail-panel">
@@ -632,11 +872,60 @@ function renderCharacterDetail(character) {
                     return `<div><dt>${job.name}</dt><dd>${value} / ${masteryBonusText(job.id, value)}</dd></div>`;
                 }).join("")}
             </dl>
+            ${renderSkillPanel(character)}
             <h3 class="subheading">装備</h3>
             <dl class="detail-list three-column">
                 ${equipmentSlots().map(([slot, item]) => `<div><dt>${slot}</dt><dd>${item}</dd></div>`).join("")}
             </dl>
         </article>
+    `;
+}
+
+function renderSkillPanel(character) {
+    return `
+        <section class="skill-panel">
+            <h3 class="subheading">スキル</h3>
+            <dl class="detail-list two-column">
+                <div><dt>習得済みアクティブ</dt><dd>${learnedSkills(character, "active").map((skill) => skill.name).join("、") || "なし"}</dd></div>
+                <div><dt>習得済みパッシブ</dt><dd>${learnedSkills(character, "passive").map((skill) => skill.name).join("、") || "なし"}</dd></div>
+                <div><dt>装備中アクティブ</dt><dd>${equippedSkillNames(character, "active")}</dd></div>
+                <div><dt>装備中パッシブ</dt><dd>${equippedSkillNames(character, "passive")}</dd></div>
+            </dl>
+            <h3 class="subheading">スキル付け替え</h3>
+            <div class="skill-slot-grid">
+                ${renderSkillSlots(character, "active", "アクティブ")}
+                ${renderSkillSlots(character, "passive", "パッシブ")}
+            </div>
+        </section>
+    `;
+}
+
+function renderSkillSlots(character, type, label) {
+    return `
+        <section class="skill-slot-group">
+            <h4>${label} 3枠</h4>
+            ${[0, 1, 2].map((slotIndex) => renderSkillSlotSelect(character, type, slotIndex)).join("")}
+        </section>
+    `;
+}
+
+function renderSkillSlotSelect(character, type, slotIndex) {
+    const equipped = character.equippedSkills?.[type] ?? [];
+    const currentId = equipped[slotIndex] ?? "";
+    const selectedSkillIds = equipped.filter((skillId) => skillId !== currentId);
+
+    return `
+        <label>
+            ${slotIndex + 1}枠目
+            <select data-action="change-skill" data-character-id="${character.id}" data-skill-type="${type}" data-slot="${slotIndex}">
+                <option value="">空き</option>
+                ${learnedSkills(character, type).map((skill) => {
+                    const selected = currentId === skill.id ? "selected" : "";
+                    const disabled = selectedSkillIds.includes(skill.id) ? "disabled" : "";
+                    return `<option value="${skill.id}" ${selected} ${disabled}>${skill.name}</option>`;
+                }).join("")}
+            </select>
+        </label>
     `;
 }
 
@@ -933,14 +1222,37 @@ function renderLogPanel() {
     return `
         <section class="table-panel log-panel">
             <div class="card-title-row">
-                <h2>冒険ログ</h2>
+                <h2>全パーティ冒険ログ</h2>
                 <span class="tag">${gameState.logs.length}件</span>
             </div>
             <ul class="log-list">
-                ${gameState.logs.map((log) => `<li>${log}</li>`).join("")}
+                ${gameState.logs.map((log) => {
+                    const badge = logBadge(log);
+                    return `<li><span class="log-badge ${badge.className}">${badge.label}</span><span>${log}</span></li>`;
+                }).join("")}
             </ul>
         </section>
     `;
+}
+
+function logBadge(log) {
+    if (log.includes("出発")) {
+        return { label: "出発", className: "badge-depart" };
+    }
+
+    if (log.includes("帰還") || log.includes("獲得")) {
+        return { label: "報酬", className: "badge-return" };
+    }
+
+    if (log.includes("転職")) {
+        return { label: "転職", className: "badge-job" };
+    }
+
+    if (log.includes("撤退")) {
+        return { label: "撤退", className: "badge-retreat" };
+    }
+
+    return { label: "記録", className: "" };
 }
 
 const renderers = {
@@ -1047,6 +1359,16 @@ app.addEventListener("click", (event) => {
             changeJob(actionButton.dataset.characterId, jobId);
         }
     }
+
+    if (actionButton.dataset.action === "next-report-step" && lastAdventureReport) {
+        lastAdventureReport.currentStep = Math.min(lastAdventureReport.currentStep + 1, lastAdventureReport.steps.length - 1);
+        renderCurrentView();
+    }
+
+    if (actionButton.dataset.action === "show-report-result" && lastAdventureReport) {
+        lastAdventureReport.currentStep = lastAdventureReport.steps.length - 1;
+        renderCurrentView();
+    }
 });
 
 app.addEventListener("change", (event) => {
@@ -1066,6 +1388,10 @@ app.addEventListener("change", (event) => {
 
     if (control.dataset.action === "home-select-dungeon") {
         homeDungeonSelections[control.dataset.partyId] = control.value;
+    }
+
+    if (control.dataset.action === "change-skill") {
+        changeSkill(control.dataset.characterId, control.dataset.skillType, control.dataset.slot, control.value);
     }
 });
 

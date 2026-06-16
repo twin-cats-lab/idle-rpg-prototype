@@ -166,7 +166,7 @@ p {
 }
 
 .home-party-section {
-    margin-top: 16px;
+    margin-top: 0;
 }
 
 .home-party-grid {
@@ -177,24 +177,103 @@ p {
 
 .home-party-card {
     display: grid;
-    gap: 14px;
+    gap: 10px;
     border: 1px solid var(--line);
     border-radius: 8px;
-    padding: 18px;
+    padding: 16px;
     background: var(--panel);
+}
+
+.home-party-meta {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+}
+
+.mini-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.mini-meta span {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 8px;
+    color: var(--muted);
+    background: var(--panel-soft);
+    font-size: 0.78rem;
 }
 
 .home-action-area {
     display: grid;
-    gap: 12px;
+    gap: 10px;
     border-top: 1px solid var(--line);
-    padding-top: 14px;
+    padding-top: 12px;
 }
 
 .big-timer {
     color: var(--green);
-    font-size: 2rem;
+    font-size: 2.1rem;
     font-weight: 800;
+}
+
+.home-summary-details {
+    margin-top: 14px;
+}
+
+.home-summary-details summary {
+    min-height: 48px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 13px 14px;
+    color: var(--accent-strong);
+    background: var(--panel);
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.compact-summary-panel {
+    margin-top: 10px;
+}
+
+.adventure-report-panel {
+    display: grid;
+    gap: 14px;
+    border: 1px solid rgba(132, 201, 155, 0.45);
+    border-radius: 8px;
+    margin-top: 16px;
+    padding: 18px;
+    background: rgba(132, 201, 155, 0.08);
+}
+
+.room-log-list {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.room-log-list li,
+.log-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.room-log-list p {
+    margin: 0;
+}
+
+.report-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.result-summary {
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
 }
 
 .section-heading {
@@ -325,6 +404,15 @@ select {
     font-size: 1.05rem;
 }
 
+.depart-button {
+    background: var(--accent);
+}
+
+.return-button {
+    border-color: var(--green);
+    background: var(--green);
+}
+
 .is-hidden {
     display: none;
 }
@@ -396,6 +484,26 @@ select:disabled {
     color: var(--accent-strong);
 }
 
+.skill-slot-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.skill-slot-group {
+    display: grid;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px;
+    background: var(--panel-soft);
+}
+
+.skill-slot-group h4 {
+    margin: 0;
+    color: var(--accent-strong);
+}
+
 .log-panel {
     margin-top: 16px;
 }
@@ -404,9 +512,45 @@ select:disabled {
     display: grid;
     gap: 8px;
     margin: 0;
-    padding-left: 18px;
+    padding: 0;
     color: var(--muted);
     line-height: 1.6;
+    list-style: none;
+}
+
+.log-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 48px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 3px 8px;
+    color: var(--text);
+    background: var(--panel-soft);
+    font-size: 0.76rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.badge-depart {
+    border-color: rgba(226, 177, 92, 0.55);
+    color: var(--accent-strong);
+}
+
+.badge-return {
+    border-color: rgba(132, 201, 155, 0.6);
+    color: var(--green);
+}
+
+.badge-job {
+    border-color: rgba(185, 181, 173, 0.55);
+    color: var(--text);
+}
+
+.badge-retreat {
+    border-color: rgba(238, 130, 130, 0.6);
+    color: #ee9a9a;
 }
 
 table {
@@ -459,13 +603,27 @@ th {
     }
 
     .big-timer {
-        font-size: 2.25rem;
+        font-size: 2.15rem;
+    }
+
+    .report-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .room-log-list li,
+    .log-list li {
+        gap: 8px;
+    }
+
+    .log-badge {
+        min-width: 44px;
     }
 
     .hero-panel,
     .detail-layout,
     .adventure-layout,
     .formation-grid,
+    .skill-slot-grid,
     .detail-list.two-column,
     .detail-list.three-column {
         grid-template-columns: 1fr;
