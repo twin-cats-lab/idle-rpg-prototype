@@ -101,6 +101,7 @@ let selectedCharacterId = "chara-01";
 let selectedPartyId = "party-01";
 let homeDungeonSelections = {};
 let lastAdventureReport = null;
+let isCharacterDetailPanelOpen = false;
 let gameState = createInitialState();
 
 const byId = (collection, id) => collection.find((item) => item.id === id);
@@ -812,18 +813,20 @@ function renderAdventureReportResult(report) {
 function renderCharacters() {
     const selectedCharacter = byId(gameData.characters, selectedCharacterId) ?? gameData.characters[0];
     selectedCharacterId = selectedCharacter.id;
+    const mobile = isMobileView();
 
     app.innerHTML = `
         <section class="section-heading">
             <h2>キャラクター</h2>
             <p>帰還時の成長情報と、所属パーティ、装備欄の確認ができます。</p>
         </section>
-        <section class="detail-layout">
+        <section class="${mobile ? "character-list-layout" : "detail-layout"}">
             <div class="card-grid compact-grid">
                 ${gameData.characters.map((character) => renderCharacterListCard(character)).join("")}
             </div>
-            ${renderCharacterDetail(selectedCharacter)}
+            ${mobile ? "" : renderCharacterDetail(selectedCharacter)}
         </section>
+        ${mobile && isCharacterDetailPanelOpen ? renderMobileCharacterDetail(selectedCharacter) : ""}
     `;
 }
 
@@ -842,18 +845,22 @@ function renderCharacterListCard(character) {
     `;
 }
 
-function renderCharacterDetail(character) {
+function renderCharacterDetail(character, options = {}) {
     const party = partyForCharacter(character.id);
     normalizeSkillState(character);
+    const panelClass = options.mobile ? "mobile-detail-card" : "detail-panel";
 
     return `
-        <article class="wide-card detail-panel">
+        <article class="wide-card ${panelClass}">
             <div class="card-title-row">
                 <div>
                     <p class="eyebrow">Character Detail</p>
                     <h3>${character.name}</h3>
                 </div>
-                <span class="tag">Lv${character.level}</span>
+                <div class="title-actions">
+                    <span class="tag">Lv${character.level}</span>
+                    ${options.mobile ? `<button class="secondary-button close-button" type="button" data-action="close-character-detail">閉じる</button>` : ""}
+                </div>
             </div>
             <dl class="detail-list two-column">
                 <div><dt>経験値</dt><dd>${character.experience} / ${expToNextLevel(character.level)}</dd></div>
@@ -878,6 +885,17 @@ function renderCharacterDetail(character) {
                 ${equipmentSlots().map(([slot, item]) => `<div><dt>${slot}</dt><dd>${item}</dd></div>`).join("")}
             </dl>
         </article>
+    `;
+}
+
+function renderMobileCharacterDetail(character) {
+    return `
+        <section class="mobile-detail-overlay" role="dialog" aria-modal="true" aria-label="${character.name}の詳細">
+            <div class="mobile-detail-backdrop" data-action="close-character-detail"></div>
+            <div class="mobile-detail-sheet">
+                ${renderCharacterDetail(character, { mobile: true })}
+            </div>
+        </section>
     `;
 }
 
@@ -1277,6 +1295,10 @@ function renderCurrentView() {
     renderers[currentView]();
 }
 
+function isMobileView() {
+    return typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+}
+
 function updateTimers() {
     document.querySelectorAll("[data-countdown-return-at]").forEach((timerElement) => {
         const returnAt = Number(timerElement.dataset.countdownReturnAt);
@@ -1344,6 +1366,12 @@ app.addEventListener("click", (event) => {
 
     if (actionButton.dataset.action === "select-character") {
         selectedCharacterId = actionButton.dataset.characterId;
+        isCharacterDetailPanelOpen = isMobileView();
+        renderCurrentView();
+    }
+
+    if (actionButton.dataset.action === "close-character-detail") {
+        isCharacterDetailPanelOpen = false;
         renderCurrentView();
     }
 
@@ -1397,6 +1425,20 @@ app.addEventListener("change", (event) => {
 
 loadState();
 switchView("home");
+
+if (typeof window !== "undefined") {
+    window.addEventListener("resize", () => {
+        if (currentView !== "characters") {
+            return;
+        }
+
+        if (!isMobileView()) {
+            isCharacterDetailPanelOpen = false;
+        }
+
+        renderCurrentView();
+    });
+}
 
 setInterval(() => {
     if (currentView === "home") {

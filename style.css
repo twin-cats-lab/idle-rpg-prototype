@@ -302,6 +302,10 @@ p {
     align-items: start;
 }
 
+.character-list-layout {
+    display: block;
+}
+
 .adventure-layout {
     display: grid;
     grid-template-columns: minmax(280px, 0.9fr) minmax(280px, 1fr) minmax(280px, 1.1fr);
@@ -323,6 +327,44 @@ p {
 .detail-panel {
     position: sticky;
     top: 12px;
+}
+
+.title-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mobile-detail-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: none;
+}
+
+.mobile-detail-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.56);
+}
+
+.mobile-detail-sheet {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    max-height: 88vh;
+    overflow: auto;
+    padding: 12px;
+}
+
+.mobile-detail-card {
+    border-radius: 12px 12px 0 0;
+}
+
+.close-button {
+    min-height: 34px;
+    padding: 6px 10px;
 }
 
 .card-title-row {
@@ -631,5 +673,18 @@ th {
 
     .detail-panel {
         position: static;
+    }
+
+    .mobile-detail-overlay {
+        display: block;
+    }
+
+    .mobile-detail-sheet .wide-card {
+        padding: 16px;
+    }
+
+    .title-actions {
+        align-items: flex-end;
+        flex-direction: column;
     }
 }
