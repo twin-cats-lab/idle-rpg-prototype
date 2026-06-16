@@ -488,12 +488,92 @@ function renderHome() {
                 ${summaryItem("ダンジョン", `${gameData.dungeons.length} 件`)}
             </div>
         </section>
+        ${renderHomePartyStatus()}
         ${renderLogPanel()}
     `;
 }
 
 function summaryItem(label, value) {
     return `<div class="summary-item"><span>${label}</span><strong>${value}</strong></div>`;
+}
+
+function renderHomePartyStatus() {
+    return `
+        <section class="home-party-section">
+            <div class="card-title-row">
+                <div>
+                    <p class="eyebrow">Party Status</p>
+                    <h2>パーティ冒険状況</h2>
+                </div>
+                <span class="tag">${gameData.parties.length}隊</span>
+            </div>
+            <div class="home-party-grid">
+                ${gameData.parties.map((party) => renderHomePartyCard(party)).join("")}
+            </div>
+        </section>
+    `;
+}
+
+function renderHomePartyCard(party) {
+    const adventure = partyAdventure(party.id);
+    const dungeon = adventure ? byId(gameData.dungeons, adventure.dungeonId) : null;
+    const status = adventureStatus(adventure);
+    const canDepart = !adventure && party.memberIds.length > 0;
+
+    return `
+        <article class="home-party-card">
+            <div class="card-title-row">
+                <div>
+                    <h3>${party.name}</h3>
+                    <p>${namesFromIds(gameData.characters, party.memberIds)}</p>
+                </div>
+                <span class="tag">${status}</span>
+            </div>
+            <dl class="detail-list">
+                <div><dt>現在地</dt><dd>${dungeon ? dungeon.name : "街"}</dd></div>
+                <div><dt>方針</dt><dd>${partyPolicy(party)}</dd></div>
+            </dl>
+            ${adventure ? renderHomeAdventureAction(adventure, dungeon) : renderHomeDepartAction(party, canDepart)}
+        </article>
+    `;
+}
+
+function renderHomeAdventureAction(adventure, dungeon) {
+    const returned = Date.now() >= adventure.returnAt;
+
+    if (returned) {
+        return `
+            <div class="home-action-area">
+                <div class="big-timer">帰還済み</div>
+                <p>${dungeon.name}の報酬を受け取れます。</p>
+                <button class="primary-button touch-button" type="button" data-action="claim-reward" data-adventure-id="${adventure.id}">帰還・報酬受取</button>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="home-action-area">
+            <div class="big-timer">${remainingTimeText(adventure.returnAt)}</div>
+            <p>${new Date(adventure.returnAt).toLocaleTimeString("ja-JP")} 帰還予定</p>
+        </div>
+    `;
+}
+
+function renderHomeDepartAction(party, canDepart) {
+    return `
+        <div class="home-action-area">
+            <label>
+                ダンジョン
+                <select id="homeDungeon-${party.id}" ${canDepart ? "" : "disabled"}>
+                    ${gameData.dungeons.map((dungeon) => `
+                        <option value="${dungeon.id}">${dungeon.name}（${formatDuration(dungeon.durationSeconds)}）</option>
+                    `).join("")}
+                </select>
+            </label>
+            <button class="primary-button touch-button" type="button" data-action="home-start-adventure" data-party-id="${party.id}" ${canDepart ? "" : "disabled"}>出発</button>
+            ${party.memberIds.length === 0 ? `<p class="notice">メンバーがいないため出発できません。</p>` : ""}
+        </div>
+    `;
 }
 
 function renderCharacters() {
@@ -905,6 +985,15 @@ app.addEventListener("click", (event) => {
     if (actionButton.dataset.action === "start-adventure") {
         const partyId = document.getElementById("partySelect")?.value;
         const dungeonId = document.getElementById("dungeonSelect")?.value;
+
+        if (partyId && dungeonId) {
+            startAdventure(partyId, dungeonId);
+        }
+    }
+
+    if (actionButton.dataset.action === "home-start-adventure") {
+        const partyId = actionButton.dataset.partyId;
+        const dungeonId = document.getElementById(`homeDungeon-${partyId}`)?.value;
 
         if (partyId && dungeonId) {
             startAdventure(partyId, dungeonId);
