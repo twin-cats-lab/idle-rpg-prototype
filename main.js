@@ -77,6 +77,7 @@ const navButtons = document.querySelectorAll(".nav-button");
 let currentView = "home";
 let selectedCharacterId = "chara-01";
 let selectedPartyId = "party-01";
+let homeDungeonSelections = {};
 let gameState = createInitialState();
 
 const byId = (collection, id) => collection.find((item) => item.id === id);
@@ -560,13 +561,15 @@ function renderHomeAdventureAction(adventure, dungeon) {
 }
 
 function renderHomeDepartAction(party, canDepart) {
+    const selectedDungeonId = homeDungeonSelections[party.id] ?? gameData.dungeons[0]?.id;
+
     return `
         <div class="home-action-area">
             <label>
                 ダンジョン
-                <select id="homeDungeon-${party.id}" ${canDepart ? "" : "disabled"}>
+                <select id="homeDungeon-${party.id}" data-action="home-select-dungeon" data-party-id="${party.id}" ${canDepart ? "" : "disabled"}>
                     ${gameData.dungeons.map((dungeon) => `
-                        <option value="${dungeon.id}">${dungeon.name}（${formatDuration(dungeon.durationSeconds)}）</option>
+                        <option value="${dungeon.id}" ${selectedDungeonId === dungeon.id ? "selected" : ""}>${dungeon.name}（${formatDuration(dungeon.durationSeconds)}）</option>
                     `).join("")}
                 </select>
             </label>
@@ -1036,6 +1039,10 @@ app.addEventListener("change", (event) => {
 
     if (control.dataset.action === "change-formation") {
         changeFormation(control.dataset.partyId, control.dataset.line, control.dataset.slot, control.value);
+    }
+
+    if (control.dataset.action === "home-select-dungeon") {
+        homeDungeonSelections[control.dataset.partyId] = control.value;
     }
 });
 
