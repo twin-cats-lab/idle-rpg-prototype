@@ -168,9 +168,20 @@ p {
     gap: 14px;
 }
 
+.compact-grid {
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
 .stack {
     display: grid;
     gap: 14px;
+}
+
+.detail-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.85fr) minmax(360px, 1.15fr);
+    gap: 14px;
+    align-items: start;
 }
 
 .adventure-layout {
@@ -184,6 +195,16 @@ p {
 .wide-card,
 .table-panel {
     padding: 18px;
+}
+
+.selected-card {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px rgba(226, 177, 92, 0.2);
+}
+
+.detail-panel {
+    position: sticky;
+    top: 12px;
 }
 
 .card-title-row {
@@ -201,6 +222,10 @@ p {
 
 .detail-list.two-column {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.detail-list.three-column {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .detail-list div {
@@ -256,9 +281,67 @@ select {
     background: var(--accent-strong);
 }
 
+.secondary-button {
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    background: var(--panel-soft);
+    font: inherit;
+    cursor: pointer;
+}
+
+.secondary-button:hover {
+    border-color: var(--accent);
+}
+
+.full-button {
+    width: 100%;
+    margin-top: 16px;
+}
+
+button:disabled,
+select:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
 .reward-button {
     width: 100%;
     margin-top: 16px;
+}
+
+.subheading {
+    margin: 20px 0 10px;
+}
+
+.notice {
+    border: 1px solid rgba(226, 177, 92, 0.35);
+    border-radius: 8px;
+    margin: 16px 0 0;
+    padding: 12px;
+    background: rgba(226, 177, 92, 0.08);
+}
+
+.formation-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.formation-line {
+    display: grid;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px;
+    background: var(--panel-soft);
+}
+
+.formation-line h4 {
+    margin: 0;
+    color: var(--accent-strong);
 }
 
 .log-panel {
@@ -302,8 +385,15 @@ th {
     }
 
     .hero-panel,
+    .detail-layout,
     .adventure-layout,
-    .detail-list.two-column {
+    .formation-grid,
+    .detail-list.two-column,
+    .detail-list.three-column {
         grid-template-columns: 1fr;
+    }
+
+    .detail-panel {
+        position: static;
     }
 }

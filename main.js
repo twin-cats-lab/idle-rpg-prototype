@@ -74,10 +74,35 @@ const app = document.getElementById("app");
 const navButtons = document.querySelectorAll(".nav-button");
 
 let currentView = "home";
+let selectedCharacterId = "chara-01";
+let selectedPartyId = "party-01";
 let gameState = createInitialState();
 
 const byId = (collection, id) => collection.find((item) => item.id === id);
-const namesFromIds = (collection, ids) => ids.map((id) => byId(collection, id)?.name ?? "不明").join("、");
+const namesFromIds = (collection, ids) => {
+    const names = ids.map((id) => byId(collection, id)?.name).filter(Boolean);
+    return names.length > 0 ? names.join("、") : "空き";
+};
+
+function uniqueIds(ids) {
+    return [...new Set(ids.filter((id) => byId(gameData.characters, id)))];
+}
+
+function sanitizeFormationSlot(ids, limit, usedIds = []) {
+    const used = new Set(usedIds);
+    const sanitized = [];
+
+    ids.forEach((id) => {
+        if (!id || used.has(id) || sanitized.includes(id) || !byId(gameData.characters, id)) {
+            return;
+        }
+
+        sanitized.push(id);
+        used.add(id);
+    });
+
+    return sanitized.slice(0, limit);
+}
 
 function createInitialState() {
     return {
@@ -113,6 +138,23 @@ function loadState() {
             character.totalExperience = Number(savedCharacter.totalExperience) || 0;
         });
     }
+
+    if (Array.isArray(saved.parties)) {
+        saved.parties.forEach((savedParty) => {
+            const party = byId(gameData.parties, savedParty.id);
+
+            if (!party) {
+                return;
+            }
+
+            const front = sanitizeFormationSlot(savedParty.formation?.front ?? [], 3);
+            const back = sanitizeFormationSlot(savedParty.formation?.back ?? [], 3, front);
+            const memberIds = uniqueIds([...front, ...back]);
+            party.formation = { front, back };
+            party.memberIds = memberIds;
+            party.leaderId = memberIds.includes(savedParty.leaderId) ? savedParty.leaderId : memberIds[0] ?? party.leaderId;
+        });
+    }
 }
 
 function readSavedState() {
@@ -136,6 +178,12 @@ function saveState() {
                 level: character.level,
                 experience: character.experience,
                 totalExperience: character.totalExperience
+            })),
+            parties: gameData.parties.map((party) => ({
+                id: party.id,
+                leaderId: party.leaderId,
+                memberIds: party.memberIds,
+                formation: party.formation
             }))
         };
 
@@ -151,6 +199,51 @@ function jobName(id) {
 
 function personalityNames(ids) {
     return ids.map((id) => byId(gameData.personalities, id)?.name ?? "不明").join(" / ");
+}
+
+function personalityTendency(id) {
+    return byId(gameData.personalities, id)?.tendency ?? "安全";
+}
+
+function partyForCharacter(characterId) {
+    return gameData.parties.find((party) => party.memberIds.includes(characterId));
+}
+
+function equipmentSlots() {
+    return [
+        ["武器", "未装備"],
+        ["防具", "未装備"],
+        ["装飾", "未装備"]
+    ];
+}
+
+function partyPolicy(party) {
+    const leader = byId(gameData.characters, party.leaderId);
+
+    if (!leader) {
+        return "未設定";
+    }
+
+    const scores = leader.personalities.reduce((result, personalityId) => {
+        const tendency = personalityTendency(personalityId);
+        result[tendency] = (result[tendency] ?? 0) + 1;
+        return result;
+    }, {});
+
+    const topTendency = Object.entries(scores).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "安全";
+    const labelMap = {
+        探索: "探索寄り",
+        安全: "安全寄り",
+        修行: "修行寄り",
+        ボス攻略: "攻略寄り",
+        支援: "安全寄り"
+    };
+
+    return labelMap[topTendency] ?? `${topTendency}寄り`;
+}
+
+function isPartyBusy(partyId) {
+    return Boolean(partyAdventure(partyId));
 }
 
 function expToNextLevel(level) {
@@ -202,7 +295,7 @@ function startAdventure(partyId, dungeonId) {
     const party = byId(gameData.parties, partyId);
     const dungeon = byId(gameData.dungeons, dungeonId);
 
-    if (!party || !dungeon) {
+    if (!party || !dungeon || party.memberIds.length === 0) {
         return;
     }
 
@@ -261,6 +354,51 @@ function claimReward(adventureId) {
     renderCurrentView();
 }
 
+function changeLeader(partyId, leaderId) {
+    const party = byId(gameData.parties, partyId);
+
+    if (!party || isPartyBusy(partyId) || !party.memberIds.includes(leaderId)) {
+        return;
+    }
+
+    party.leaderId = leaderId;
+    saveState();
+    renderCurrentView();
+}
+
+function changeFormation(partyId, line, slotIndex, characterId) {
+    const party = byId(gameData.parties, partyId);
+
+    if (!party || isPartyBusy(partyId) || !["front", "back"].includes(line)) {
+        return;
+    }
+
+    const index = Number(slotIndex);
+
+    if (!Number.isInteger(index) || index < 0 || index > 2) {
+        return;
+    }
+
+    const otherIds = uniqueIds([...party.formation.front, ...party.formation.back]).filter((id) => id !== party.formation[line][index]);
+
+    if (characterId && otherIds.includes(characterId)) {
+        renderCurrentView();
+        return;
+    }
+
+    party.formation[line][index] = characterId || undefined;
+    party.formation.front = sanitizeFormationSlot(party.formation.front, 3);
+    party.formation.back = sanitizeFormationSlot(party.formation.back, 3, party.formation.front);
+    party.memberIds = uniqueIds([...party.formation.front, ...party.formation.back]);
+
+    if (!party.memberIds.includes(party.leaderId)) {
+        party.leaderId = party.memberIds[0] ?? "";
+    }
+
+    saveState();
+    renderCurrentView();
+}
+
 function renderHome() {
     const activeCount = gameState.adventures.filter((adventure) => Date.now() < adventure.returnAt).length;
     const returnedCount = gameState.adventures.length - activeCount;
@@ -290,38 +428,80 @@ function summaryItem(label, value) {
 }
 
 function renderCharacters() {
+    const selectedCharacter = byId(gameData.characters, selectedCharacterId) ?? gameData.characters[0];
+    selectedCharacterId = selectedCharacter.id;
+
     app.innerHTML = `
         <section class="section-heading">
             <h2>キャラクター</h2>
-            <p>帰還時に経験値を受け取り、必要経験値に達していればまとめてレベルアップします。</p>
+            <p>帰還時の成長情報と、所属パーティ、装備欄の確認ができます。</p>
         </section>
-        <section class="card-grid">
-            ${gameData.characters.map((character) => `
-                <article class="card">
-                    <div class="card-title-row">
-                        <h3>${character.name}</h3>
-                        <span class="tag">Lv${character.level}</span>
-                    </div>
-                    <dl class="detail-list">
-                        <div><dt>職業</dt><dd>${jobName(character.jobId)}</dd></div>
-                        <div><dt>性格</dt><dd>${personalityNames(character.personalities)}</dd></div>
-                        <div><dt>配置</dt><dd>${character.position}</dd></div>
-                        <div><dt>経験値</dt><dd>${character.experience} / ${expToNextLevel(character.level)}</dd></div>
-                    </dl>
-                </article>
-            `).join("")}
+        <section class="detail-layout">
+            <div class="card-grid compact-grid">
+                ${gameData.characters.map((character) => renderCharacterListCard(character)).join("")}
+            </div>
+            ${renderCharacterDetail(selectedCharacter)}
         </section>
     `;
 }
 
+function renderCharacterListCard(character) {
+    const selected = character.id === selectedCharacterId ? "selected-card" : "";
+
+    return `
+        <article class="card ${selected}">
+            <div class="card-title-row">
+                <h3>${character.name}</h3>
+                <span class="tag">Lv${character.level}</span>
+            </div>
+            <p>${jobName(character.jobId)} / ${personalityNames(character.personalities)}</p>
+            <button class="secondary-button" type="button" data-action="select-character" data-character-id="${character.id}">詳細を見る</button>
+        </article>
+    `;
+}
+
+function renderCharacterDetail(character) {
+    const party = partyForCharacter(character.id);
+
+    return `
+        <article class="wide-card detail-panel">
+            <div class="card-title-row">
+                <div>
+                    <p class="eyebrow">Character Detail</p>
+                    <h3>${character.name}</h3>
+                </div>
+                <span class="tag">Lv${character.level}</span>
+            </div>
+            <dl class="detail-list two-column">
+                <div><dt>経験値</dt><dd>${character.experience} / ${expToNextLevel(character.level)}</dd></div>
+                <div><dt>累計経験値</dt><dd>${character.totalExperience}</dd></div>
+                <div><dt>職業</dt><dd>${jobName(character.jobId)}</dd></div>
+                <div><dt>所属パーティ</dt><dd>${party ? party.name : "未所属"}</dd></div>
+                <div><dt>性格1</dt><dd>${byId(gameData.personalities, character.personalities[0])?.name ?? "未設定"}</dd></div>
+                <div><dt>性格2</dt><dd>${byId(gameData.personalities, character.personalities[1])?.name ?? "未設定"}</dd></div>
+            </dl>
+            <h3 class="subheading">装備</h3>
+            <dl class="detail-list three-column">
+                ${equipmentSlots().map(([slot, item]) => `<div><dt>${slot}</dt><dd>${item}</dd></div>`).join("")}
+            </dl>
+        </article>
+    `;
+}
+
 function renderParties() {
+    const selectedParty = byId(gameData.parties, selectedPartyId) ?? gameData.parties[0];
+    selectedPartyId = selectedParty.id;
+
     app.innerHTML = `
         <section class="section-heading">
             <h2>パーティ</h2>
-            <p>冒険中のパーティは、報酬受取が終わるまで再出発できません。</p>
+            <p>最大6名、前衛3名・後衛3名で編成します。冒険中のパーティは編成変更できません。</p>
         </section>
-        <section class="stack">
-            ${gameData.parties.map((party) => renderPartyCard(party)).join("")}
+        <section class="detail-layout">
+            <div class="stack">
+                ${gameData.parties.map((party) => renderPartyCard(party)).join("")}
+            </div>
+            ${renderPartyDetail(selectedParty)}
         </section>
     `;
 }
@@ -333,24 +513,98 @@ function renderPartyCard(party) {
     const dungeon = adventure ? byId(gameData.dungeons, adventure.dungeonId) : null;
 
     return `
-        <article class="wide-card">
+        <article class="wide-card ${party.id === selectedPartyId ? "selected-card" : ""}">
             <div class="card-title-row">
                 <h3>${party.name}</h3>
                 <span class="tag">${status}</span>
             </div>
             <dl class="detail-list two-column">
-                <div><dt>リーダー</dt><dd>${leader.name}</dd></div>
+                <div><dt>リーダー</dt><dd>${leader?.name ?? "未設定"}</dd></div>
+                <div><dt>方針</dt><dd>${partyPolicy(party)}</dd></div>
                 <div><dt>神器</dt><dd>${party.artifact}</dd></div>
+                <div><dt>人数</dt><dd>${party.memberIds.length} / 6</dd></div>
                 <div><dt>前衛</dt><dd>${namesFromIds(gameData.characters, party.formation.front)}</dd></div>
                 <div><dt>後衛</dt><dd>${namesFromIds(gameData.characters, party.formation.back)}</dd></div>
                 <div><dt>現在地</dt><dd>${dungeon ? dungeon.name : "街"}</dd></div>
                 <div><dt>残り時間</dt><dd>${adventure ? remainingTimeText(adventure.returnAt) : "-"}</dd></div>
             </dl>
+            <button class="secondary-button full-button" type="button" data-action="select-party" data-party-id="${party.id}">詳細・編成</button>
         </article>
     `;
 }
 
+function renderPartyDetail(party) {
+    const busy = isPartyBusy(party.id);
+    const leader = byId(gameData.characters, party.leaderId);
+
+    return `
+        <article class="wide-card detail-panel">
+            <div class="card-title-row">
+                <div>
+                    <p class="eyebrow">Party Detail</p>
+                    <h3>${party.name}</h3>
+                </div>
+                <span class="tag">${busy ? "編成不可" : "編成可"}</span>
+            </div>
+            <dl class="detail-list two-column">
+                <div><dt>最大人数</dt><dd>${party.memberIds.length} / 6</dd></div>
+                <div><dt>方針</dt><dd>${partyPolicy(party)}</dd></div>
+                <div><dt>リーダー</dt><dd>${leader?.name ?? "未設定"}</dd></div>
+                <div><dt>リーダー性格</dt><dd>${leader ? personalityNames(leader.personalities) : "未設定"}</dd></div>
+            </dl>
+            ${busy ? `<p class="notice">このパーティは冒険中です。帰還後に報酬を受け取るまで編成変更できません。</p>` : ""}
+            <h3 class="subheading">リーダー指定</h3>
+            <label>
+                リーダー
+                <select data-action="change-leader" data-party-id="${party.id}" ${busy ? "disabled" : ""}>
+                    ${party.memberIds.map((characterId) => {
+                        const character = byId(gameData.characters, characterId);
+                        return `<option value="${characterId}" ${party.leaderId === characterId ? "selected" : ""}>${character?.name ?? "不明"}</option>`;
+                    }).join("")}
+                </select>
+            </label>
+            <h3 class="subheading">編成</h3>
+            <div class="formation-grid">
+                ${renderFormationSlotGroup(party, "front", "前衛", busy)}
+                ${renderFormationSlotGroup(party, "back", "後衛", busy)}
+            </div>
+        </article>
+    `;
+}
+
+function renderFormationSlotGroup(party, line, label, busy) {
+    const slots = [0, 1, 2];
+
+    return `
+        <section class="formation-line">
+            <h4>${label}</h4>
+            ${slots.map((slotIndex) => renderFormationSelect(party, line, slotIndex, busy)).join("")}
+        </section>
+    `;
+}
+
+function renderFormationSelect(party, line, slotIndex, busy) {
+    const currentId = party.formation[line][slotIndex] ?? "";
+    const selectedIds = uniqueIds([...party.formation.front, ...party.formation.back]).filter((id) => id !== currentId);
+
+    return `
+        <label>
+            ${line === "front" ? "前衛" : "後衛"}${slotIndex + 1}
+            <select data-action="change-formation" data-party-id="${party.id}" data-line="${line}" data-slot="${slotIndex}" ${busy ? "disabled" : ""}>
+                <option value="">空き</option>
+                ${gameData.characters.map((character) => {
+                    const disabled = selectedIds.includes(character.id) ? "disabled" : "";
+                    const selected = currentId === character.id ? "selected" : "";
+                    return `<option value="${character.id}" ${selected} ${disabled}>${character.name}</option>`;
+                }).join("")}
+            </select>
+        </label>
+    `;
+}
+
 function renderAdventure() {
+    const hasAvailableParty = gameData.parties.some((party) => !partyAdventure(party.id) && party.memberIds.length > 0);
+
     app.innerHTML = `
         <section class="section-heading">
             <h2>冒険</h2>
@@ -364,8 +618,9 @@ function renderAdventure() {
                         パーティ
                         <select id="partySelect">
                             ${gameData.parties.map((party) => {
-                                const disabled = partyAdventure(party.id) ? "disabled" : "";
-                                return `<option value="${party.id}" ${disabled}>${party.name}${disabled ? "（冒険中）" : ""}</option>`;
+                                const unavailableReason = partyAdventure(party.id) ? "冒険中" : party.memberIds.length === 0 ? "メンバーなし" : "";
+                                const disabled = unavailableReason ? "disabled" : "";
+                                return `<option value="${party.id}" ${disabled}>${party.name}${unavailableReason ? `（${unavailableReason}）` : ""}</option>`;
                             }).join("")}
                         </select>
                     </label>
@@ -377,7 +632,7 @@ function renderAdventure() {
                             `).join("")}
                         </select>
                     </label>
-                    <button class="primary-button" type="button" data-action="start-adventure">出発</button>
+                    <button class="primary-button" type="button" data-action="start-adventure" ${hasAvailableParty ? "" : "disabled"}>出発</button>
                 </div>
             </article>
             <section class="stack">
@@ -551,6 +806,32 @@ app.addEventListener("click", (event) => {
 
     if (actionButton.dataset.action === "claim-reward") {
         claimReward(actionButton.dataset.adventureId);
+    }
+
+    if (actionButton.dataset.action === "select-character") {
+        selectedCharacterId = actionButton.dataset.characterId;
+        renderCurrentView();
+    }
+
+    if (actionButton.dataset.action === "select-party") {
+        selectedPartyId = actionButton.dataset.partyId;
+        renderCurrentView();
+    }
+});
+
+app.addEventListener("change", (event) => {
+    const control = event.target.closest("[data-action]");
+
+    if (!control) {
+        return;
+    }
+
+    if (control.dataset.action === "change-leader") {
+        changeLeader(control.dataset.partyId, control.value);
+    }
+
+    if (control.dataset.action === "change-formation") {
+        changeFormation(control.dataset.partyId, control.dataset.line, control.dataset.slot, control.value);
     }
 });
 
