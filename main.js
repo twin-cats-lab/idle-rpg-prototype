@@ -1,14 +1,15 @@
 const STORAGE_KEY = "twinCatsIdleRpg.stage2";
+const ROOKIE_JOB_ID = "rookie";
 
 const gameData = {
     jobs: [
-        { id: "rookie", name: "ひよっこ", tier: "初期職", note: "全能力平均。Lv5で転職可能。" },
-        { id: "fighter", name: "戦士", tier: "基本職", note: "前衛で攻撃を担う。" },
-        { id: "guardian", name: "守護者", tier: "基本職", note: "味方を守る耐久型。" },
-        { id: "scout", name: "斥候", tier: "基本職", note: "探索と先制に優れる。" },
-        { id: "mage", name: "魔術師", tier: "基本職", note: "魔法攻撃を扱う後衛職。" },
-        { id: "shaman", name: "祈祷師", tier: "基本職", note: "回復と支援を担当する。" },
-        { id: "hunter", name: "狩人", tier: "基本職", note: "命中と種族対策に長ける。" }
+        { id: "rookie", name: "ひよっこ", tier: "初期職", bonusStat: "全能力", note: "全能力平均。Lv5で基本職へ転職可能。" },
+        { id: "fighter", name: "戦士", tier: "基本職", bonusStat: "攻撃", note: "前衛で攻撃を担う。" },
+        { id: "guardian", name: "守護者", tier: "基本職", bonusStat: "防御", note: "味方を守る耐久型。" },
+        { id: "scout", name: "斥候", tier: "基本職", bonusStat: "探索", note: "探索と先制に優れる。" },
+        { id: "mage", name: "魔術師", tier: "基本職", bonusStat: "魔力", note: "魔法攻撃を扱う後衛職。" },
+        { id: "shaman", name: "祈祷師", tier: "基本職", bonusStat: "回復", note: "回復と支援を担当する。" },
+        { id: "hunter", name: "狩人", tier: "基本職", bonusStat: "命中", note: "命中と種族対策に長ける。" }
     ],
     personalities: [
         { id: "diligent", name: "努力家", tendency: "修行" },
@@ -18,12 +19,12 @@ const gameData = {
         { id: "kind", name: "世話焼き", tendency: "支援" }
     ],
     characters: [
-        { id: "chara-01", name: "ミナ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["diligent", "kind"], position: "前衛" },
-        { id: "chara-02", name: "トウマ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["bold", "curious"], position: "前衛" },
-        { id: "chara-03", name: "セリカ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["careful", "diligent"], position: "後衛" },
-        { id: "chara-04", name: "レン", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["curious", "careful"], position: "前衛" },
-        { id: "chara-05", name: "ユイ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["kind", "careful"], position: "後衛" },
-        { id: "chara-06", name: "カイ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["bold", "diligent"], position: "後衛" }
+        { id: "chara-01", name: "ミナ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["diligent", "kind"], position: "前衛" },
+        { id: "chara-02", name: "トウマ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["bold", "curious"], position: "前衛" },
+        { id: "chara-03", name: "セリカ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["careful", "diligent"], position: "後衛" },
+        { id: "chara-04", name: "レン", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["curious", "careful"], position: "前衛" },
+        { id: "chara-05", name: "ユイ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["kind", "careful"], position: "後衛" },
+        { id: "chara-06", name: "カイ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["bold", "diligent"], position: "後衛" }
     ],
     parties: [
         {
@@ -50,7 +51,7 @@ const gameData = {
             knowledge: 20,
             recommendedLevel: 1,
             durationSeconds: 30,
-            reward: { experience: 35, gold: 18 },
+            reward: { experience: 35, mastery: 4, gold: 18 },
             monsterIds: ["slime", "wild-rat"]
         },
         {
@@ -59,7 +60,7 @@ const gameData = {
             knowledge: 5,
             recommendedLevel: 2,
             durationSeconds: 60,
-            reward: { experience: 55, gold: 32 },
+            reward: { experience: 55, mastery: 6, gold: 32 },
             monsterIds: ["cave-bat", "slime"]
         }
     ],
@@ -104,7 +105,30 @@ function sanitizeFormationSlot(ids, limit, usedIds = []) {
     return sanitized.slice(0, limit);
 }
 
+function createEmptyMastery() {
+    return gameData.jobs.reduce((result, job) => {
+        result[job.id] = 0;
+        return result;
+    }, {});
+}
+
+function normalizeMastery(savedMastery = {}) {
+    const mastery = createEmptyMastery();
+
+    Object.entries(savedMastery).forEach(([jobId, value]) => {
+        if (jobId in mastery) {
+            mastery[jobId] = Math.max(0, Number(value) || 0);
+        }
+    });
+
+    return mastery;
+}
+
 function createInitialState() {
+    gameData.characters.forEach((character) => {
+        character.jobMastery = normalizeMastery(character.jobMastery);
+    });
+
     return {
         gold: 0,
         adventures: [],
@@ -136,6 +160,8 @@ function loadState() {
             character.level = Number(savedCharacter.level) || character.level;
             character.experience = Number(savedCharacter.experience) || 0;
             character.totalExperience = Number(savedCharacter.totalExperience) || 0;
+            character.jobId = byId(gameData.jobs, savedCharacter.jobId) ? savedCharacter.jobId : character.jobId;
+            character.jobMastery = normalizeMastery(savedCharacter.jobMastery);
         });
     }
 
@@ -177,7 +203,9 @@ function saveState() {
                 id: character.id,
                 level: character.level,
                 experience: character.experience,
-                totalExperience: character.totalExperience
+                totalExperience: character.totalExperience,
+                jobId: character.jobId,
+                jobMastery: character.jobMastery
             })),
             parties: gameData.parties.map((party) => ({
                 id: party.id,
@@ -195,6 +223,29 @@ function saveState() {
 
 function jobName(id) {
     return byId(gameData.jobs, id)?.name ?? "不明";
+}
+
+function basicJobs() {
+    return gameData.jobs.filter((job) => job.tier === "基本職");
+}
+
+function canChangeToBasicJob(character) {
+    return character.jobId === ROOKIE_JOB_ID && character.level >= 5;
+}
+
+function masteryBonusText(jobId, masteryValue) {
+    const job = byId(gameData.jobs, jobId);
+    const bonusPercent = Math.floor((Number(masteryValue) || 0) / 10);
+
+    if (!job) {
+        return "未設定";
+    }
+
+    return bonusPercent > 0 ? `${job.bonusStat}+${bonusPercent}%` : `${job.bonusStat}+0%`;
+}
+
+function masteryValue(character, jobId) {
+    return character.jobMastery?.[jobId] ?? 0;
 }
 
 function personalityNames(ids) {
@@ -337,6 +388,7 @@ function claimReward(adventureId) {
 
         character.experience += dungeon.reward.experience;
         character.totalExperience += dungeon.reward.experience;
+        character.jobMastery[character.jobId] = (character.jobMastery[character.jobId] ?? 0) + dungeon.reward.mastery;
 
         while (character.experience >= expToNextLevel(character.level)) {
             character.experience -= expToNextLevel(character.level);
@@ -348,7 +400,7 @@ function claimReward(adventureId) {
     gameState.gold += dungeon.reward.gold;
     gameState.adventures = gameState.adventures.filter((item) => item.id !== adventureId);
 
-    const rewardMessage = `${party.name}が${dungeon.name}から帰還。経験値${dungeon.reward.experience}、${dungeon.reward.gold}Gを獲得しました。`;
+    const rewardMessage = `${party.name}が${dungeon.name}から帰還。経験値${dungeon.reward.experience}、熟練度${dungeon.reward.mastery}、${dungeon.reward.gold}Gを獲得しました。`;
     addLog(levelMessages.length > 0 ? `${rewardMessage} レベルアップ: ${levelMessages.join("、")}` : rewardMessage);
     saveState();
     renderCurrentView();
@@ -395,6 +447,23 @@ function changeFormation(partyId, line, slotIndex, characterId) {
         party.leaderId = party.memberIds[0] ?? "";
     }
 
+    saveState();
+    renderCurrentView();
+}
+
+function changeJob(characterId, jobId) {
+    const character = byId(gameData.characters, characterId);
+    const targetJob = byId(gameData.jobs, jobId);
+
+    if (!character || !targetJob || targetJob.tier !== "基本職" || !canChangeToBasicJob(character)) {
+        return;
+    }
+
+    const previousJobName = jobName(character.jobId);
+    character.jobId = jobId;
+    character.jobMastery = normalizeMastery(character.jobMastery);
+
+    addLog(`${character.name}が${previousJobName}から${targetJob.name}へ転職しました。`);
     saveState();
     renderCurrentView();
 }
@@ -476,15 +545,53 @@ function renderCharacterDetail(character) {
                 <div><dt>経験値</dt><dd>${character.experience} / ${expToNextLevel(character.level)}</dd></div>
                 <div><dt>累計経験値</dt><dd>${character.totalExperience}</dd></div>
                 <div><dt>職業</dt><dd>${jobName(character.jobId)}</dd></div>
+                <div><dt>職業区分</dt><dd>${byId(gameData.jobs, character.jobId)?.tier ?? "不明"}</dd></div>
                 <div><dt>所属パーティ</dt><dd>${party ? party.name : "未所属"}</dd></div>
                 <div><dt>性格1</dt><dd>${byId(gameData.personalities, character.personalities[0])?.name ?? "未設定"}</dd></div>
                 <div><dt>性格2</dt><dd>${byId(gameData.personalities, character.personalities[1])?.name ?? "未設定"}</dd></div>
+            </dl>
+            ${renderJobChangePanel(character)}
+            <h3 class="subheading">職業熟練度</h3>
+            <dl class="detail-list two-column">
+                ${gameData.jobs.map((job) => {
+                    const value = masteryValue(character, job.id);
+                    return `<div><dt>${job.name}</dt><dd>${value} / ${masteryBonusText(job.id, value)}</dd></div>`;
+                }).join("")}
             </dl>
             <h3 class="subheading">装備</h3>
             <dl class="detail-list three-column">
                 ${equipmentSlots().map(([slot, item]) => `<div><dt>${slot}</dt><dd>${item}</dd></div>`).join("")}
             </dl>
         </article>
+    `;
+}
+
+function renderJobChangePanel(character) {
+    if (character.jobId !== ROOKIE_JOB_ID) {
+        return `
+            <section class="job-change-panel">
+                <h3 class="subheading">転職</h3>
+                <p class="notice">${jobName(character.jobId)}へ転職済みです。上級職や再転職は今後の段階で実装します。</p>
+            </section>
+        `;
+    }
+
+    const canChange = canChangeToBasicJob(character);
+
+    return `
+        <section class="job-change-panel">
+            <h3 class="subheading">転職</h3>
+            <p class="notice">${canChange ? "基本職へ転職できます。キャラLvは維持されます。" : "ひよっこLv5以上で基本職へ転職できます。"}</p>
+            <div class="form-grid">
+                <label>
+                    転職先
+                    <select id="jobChangeSelect" ${canChange ? "" : "disabled"}>
+                        ${basicJobs().map((job) => `<option value="${job.id}">${job.name}</option>`).join("")}
+                    </select>
+                </label>
+                <button class="primary-button" type="button" data-action="change-job" data-character-id="${character.id}" ${canChange ? "" : "disabled"}>転職する</button>
+            </div>
+        </section>
     `;
 }
 
@@ -654,7 +761,7 @@ function renderDungeonCard(dungeon) {
             </div>
             <dl class="detail-list">
                 <div><dt>帰還まで</dt><dd>${formatDuration(dungeon.durationSeconds)}</dd></div>
-                <div><dt>報酬</dt><dd>経験値${dungeon.reward.experience} / ${dungeon.reward.gold}G</dd></div>
+                <div><dt>報酬</dt><dd>経験値${dungeon.reward.experience} / 熟練度${dungeon.reward.mastery} / ${dungeon.reward.gold}G</dd></div>
                 <div><dt>知識度</dt><dd>${dungeon.knowledge}%</dd></div>
                 <div><dt>確認済み魔物</dt><dd>${namesFromIds(gameData.monsters, dungeon.monsterIds)}</dd></div>
             </dl>
@@ -687,7 +794,7 @@ function renderAdventureStatusCards() {
                     <div><dt>出発</dt><dd>${new Date(adventure.departedAt).toLocaleTimeString("ja-JP")}</dd></div>
                     <div><dt>帰還予定</dt><dd>${new Date(adventure.returnAt).toLocaleTimeString("ja-JP")}</dd></div>
                     <div><dt>残り時間</dt><dd>${remainingTimeText(adventure.returnAt)}</dd></div>
-                    <div><dt>予定報酬</dt><dd>経験値${dungeon.reward.experience} / ${dungeon.reward.gold}G</dd></div>
+                    <div><dt>予定報酬</dt><dd>経験値${dungeon.reward.experience} / 熟練度${dungeon.reward.mastery} / ${dungeon.reward.gold}G</dd></div>
                 </dl>
                 ${returned ? `<button class="primary-button reward-button" type="button" data-action="claim-reward" data-adventure-id="${adventure.id}">報酬を受け取る</button>` : ""}
             </article>
@@ -816,6 +923,14 @@ app.addEventListener("click", (event) => {
     if (actionButton.dataset.action === "select-party") {
         selectedPartyId = actionButton.dataset.partyId;
         renderCurrentView();
+    }
+
+    if (actionButton.dataset.action === "change-job") {
+        const jobId = document.getElementById("jobChangeSelect")?.value;
+
+        if (jobId) {
+            changeJob(actionButton.dataset.characterId, jobId);
+        }
     }
 });
 
