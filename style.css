@@ -238,12 +238,23 @@ p {
 
 .adventure-report-panel {
     display: grid;
-    gap: 14px;
+    grid-template-rows: auto minmax(150px, 220px) auto auto;
+    gap: 12px;
     border: 1px solid rgba(132, 201, 155, 0.45);
     border-radius: 8px;
     margin-top: 16px;
     padding: 18px;
     background: rgba(132, 201, 155, 0.08);
+}
+
+.room-log-scroll {
+    min-height: 150px;
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.12);
 }
 
 .room-log-list {
@@ -269,6 +280,9 @@ p {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
+    position: sticky;
+    bottom: 0;
+    background: var(--panel);
 }
 
 .result-summary {
@@ -630,6 +644,43 @@ select:disabled {
     margin-bottom: 0;
 }
 
+.sell-confirm-panel {
+    border: 1px solid rgba(226, 177, 92, 0.5);
+    border-radius: 8px;
+    margin-top: 14px;
+    padding: 14px;
+    background: rgba(226, 177, 92, 0.08);
+}
+
+.sell-list {
+    display: grid;
+    gap: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    margin: 12px 0;
+}
+
+.sell-row,
+.sell-total {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-top: 1px solid var(--line);
+    padding-top: 8px;
+}
+
+.sell-total {
+    color: var(--accent-strong);
+    font-size: 1.05rem;
+}
+
+.confirm-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+}
+
 .equipment-list {
     display: grid;
     gap: 10px;
@@ -711,6 +762,10 @@ th {
     }
 
     .report-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .confirm-actions {
         grid-template-columns: 1fr;
     }
 

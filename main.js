@@ -116,6 +116,8 @@ let selectedCharacterId = "chara-01";
 let selectedPartyId = "party-01";
 let homeDungeonSelections = {};
 let lastAdventureReport = null;
+let adventureReportsByParty = {};
+let sellConfirmOpen = false;
 let isCharacterDetailPanelOpen = false;
 let gameState = createInitialState();
 
@@ -633,16 +635,22 @@ function isEquipmentEquipped(equipmentId) {
     return Boolean(equippedBy(equipmentId));
 }
 
+function sellableEquipment() {
+    return gameState.inventory.equipment.filter((equipment) => !equipment.protected && !isEquipmentEquipped(equipment.id));
+}
+
 function sellUnprotectedEquipment() {
-    const selling = gameState.inventory.equipment.filter((equipment) => !equipment.protected && !isEquipmentEquipped(equipment.id));
+    const selling = sellableEquipment();
 
     if (selling.length === 0) {
+        sellConfirmOpen = false;
         return;
     }
 
     const gold = selling.reduce((total, equipment) => total + equipment.sellValue, 0);
     gameState.inventory.equipment = gameState.inventory.equipment.filter((equipment) => equipment.protected || isEquipmentEquipped(equipment.id));
     gameState.gold += gold;
+    sellConfirmOpen = false;
     addLog(`倉庫で未保護装備${selling.length}個を売却し、${gold}Gを得ました。`);
     saveState();
     renderCurrentView();
@@ -838,6 +846,7 @@ function claimReward(adventureId) {
 
     const rewardMessage = `${partyLogName(party)}が${dungeon.name}から帰還。経験値${dungeon.reward.experience}、熟練度${dungeon.reward.mastery}、${dungeon.reward.gold}Gを獲得しました。`;
     lastAdventureReport = createAdventureReport(party, dungeon, levelMessages, battleResult);
+    adventureReportsByParty[party.id] = lastAdventureReport;
     const growthMessages = [
         levelMessages.length > 0 ? `レベルアップ: ${levelMessages.join("、")}` : "",
         skillMessages.length > 0 ? `スキル習得: ${skillMessages.join("、")}` : ""
@@ -954,7 +963,6 @@ function renderHome() {
 
     app.innerHTML = `
         ${renderHomePartyStatus()}
-        ${renderAdventureReport()}
         <details class="home-summary-details">
             <summary>冒険者の準備状況</summary>
             <section class="hero-panel compact-summary-panel">
@@ -992,7 +1000,12 @@ function renderHomePartyStatus() {
                 <span class="tag">${gameData.parties.length}隊</span>
             </div>
             <div class="home-party-grid">
-                ${gameData.parties.map((party) => renderHomePartyCard(party)).join("")}
+                ${gameData.parties.map((party) => `
+                    <div class="home-party-stack">
+                        ${renderHomePartyCard(party)}
+                        ${renderAdventureReport(party.id)}
+                    </div>
+                `).join("")}
             </div>
         </section>
     `;
@@ -1054,12 +1067,13 @@ function renderHomeDepartAction(party, canDepart) {
     `;
 }
 
-function renderAdventureReport() {
-    if (!lastAdventureReport) {
+function renderAdventureReport(partyId) {
+    const report = adventureReportsByParty[partyId];
+
+    if (!report) {
         return "";
     }
 
-    const report = lastAdventureReport;
     const visibleSteps = report.steps.slice(0, report.currentStep + 1);
     const isComplete = report.currentStep >= report.steps.length - 1;
 
@@ -1068,22 +1082,24 @@ function renderAdventureReport() {
             <div class="card-title-row">
                 <div>
                     <p class="eyebrow">Return Report</p>
-                    <h2>${report.leaderName}率いるパーティの帰還ログ</h2>
+                    <h2>${report.leaderName}率いるパーティの帰還報告</h2>
                 </div>
                 <span class="log-badge badge-return">帰還</span>
             </div>
-            <ol class="room-log-list">
-                ${visibleSteps.map((step) => `
-                    <li>
-                        <span class="log-badge">${step.badge}</span>
-                        <p>${step.text}</p>
-                    </li>
-                `).join("")}
-            </ol>
+            <div class="room-log-scroll">
+                <ol class="room-log-list">
+                    ${visibleSteps.map((step) => `
+                        <li>
+                            <span class="log-badge">${step.badge}</span>
+                            <p>${step.text}</p>
+                        </li>
+                    `).join("")}
+                </ol>
+            </div>
             ${isComplete ? renderAdventureReportResult(report) : `
                 <div class="report-actions">
-                    <button class="secondary-button touch-button" type="button" data-action="next-report-step">次の部屋へ</button>
-                    <button class="primary-button touch-button" type="button" data-action="show-report-result">結果だけ見る</button>
+                    <button class="secondary-button touch-button" type="button" data-action="next-report-step" data-party-id="${partyId}">次へ</button>
+                    <button class="primary-button touch-button" type="button" data-action="show-report-result" data-party-id="${partyId}">結果を見る</button>
                 </div>
             `}
         </section>
@@ -1569,7 +1585,7 @@ function renderTown() {
 
 function renderWarehousePanel() {
     const equipment = gameState.inventory.equipment;
-    const unprotected = equipment.filter((item) => !item.protected && !isEquipmentEquipped(item.id));
+    const unprotected = sellableEquipment();
     const sellValue = unprotected.reduce((total, item) => total + item.sellValue, 0);
 
     return `
@@ -1583,8 +1599,9 @@ function renderWarehousePanel() {
             </div>
             <div class="warehouse-actions">
                 <p>未保護装備 ${unprotected.length}個 / 売却見込み ${sellValue}G</p>
-                <button class="primary-button" type="button" data-action="sell-unprotected" ${unprotected.length === 0 ? "disabled" : ""}>未保護装備を一括売却</button>
+                <button class="primary-button" type="button" data-action="open-sell-confirm" ${unprotected.length === 0 ? "disabled" : ""}>未保護装備を一括売却</button>
             </div>
+            ${sellConfirmOpen ? renderSellConfirmPanel(unprotected, sellValue) : ""}
             <h3 class="subheading">所持装備</h3>
             <div class="equipment-list">
                 ${equipment.length === 0 ? `<p>装備はまだありません。</p>` : equipment.map((item) => `
@@ -1602,6 +1619,31 @@ function renderWarehousePanel() {
                 ${gameState.inventory.materials.length === 0 ? `<p>素材はまだありません。</p>` : gameState.inventory.materials.map((material) => `
                     <span class="tag">${material.name} x${material.quantity}</span>
                 `).join("")}
+            </div>
+        </section>
+    `;
+}
+
+function renderSellConfirmPanel(items, totalGold) {
+    return `
+        <section class="sell-confirm-panel">
+            <h3>売却確認</h3>
+            <p>保護中・装備中のアイテムは含まれていません。</p>
+            <div class="sell-list">
+                ${items.map((item) => `
+                    <div class="sell-row">
+                        <span>${item.name}</span>
+                        <strong>${item.sellValue}G</strong>
+                    </div>
+                `).join("")}
+            </div>
+            <div class="sell-total">
+                <span>合計</span>
+                <strong>${totalGold}G</strong>
+            </div>
+            <div class="confirm-actions">
+                <button class="primary-button" type="button" data-action="confirm-sell-unprotected">売却する</button>
+                <button class="secondary-button" type="button" data-action="cancel-sell-confirm">キャンセル</button>
             </div>
         </section>
     `;
@@ -1771,17 +1813,35 @@ app.addEventListener("click", (event) => {
         toggleEquipmentProtection(actionButton.dataset.equipmentId);
     }
 
-    if (actionButton.dataset.action === "sell-unprotected") {
-        sellUnprotectedEquipment();
-    }
-
-    if (actionButton.dataset.action === "next-report-step" && lastAdventureReport) {
-        lastAdventureReport.currentStep = Math.min(lastAdventureReport.currentStep + 1, lastAdventureReport.steps.length - 1);
+    if (actionButton.dataset.action === "open-sell-confirm") {
+        sellConfirmOpen = true;
         renderCurrentView();
     }
 
-    if (actionButton.dataset.action === "show-report-result" && lastAdventureReport) {
-        lastAdventureReport.currentStep = lastAdventureReport.steps.length - 1;
+    if (actionButton.dataset.action === "cancel-sell-confirm") {
+        sellConfirmOpen = false;
+        renderCurrentView();
+    }
+
+    if (actionButton.dataset.action === "confirm-sell-unprotected") {
+        sellUnprotectedEquipment();
+    }
+
+    if (actionButton.dataset.action === "next-report-step") {
+        const report = adventureReportsByParty[actionButton.dataset.partyId];
+        if (!report) {
+            return;
+        }
+        report.currentStep = Math.min(report.currentStep + 1, report.steps.length - 1);
+        renderCurrentView();
+    }
+
+    if (actionButton.dataset.action === "show-report-result") {
+        const report = adventureReportsByParty[actionButton.dataset.partyId];
+        if (!report) {
+            return;
+        }
+        report.currentStep = report.steps.length - 1;
         renderCurrentView();
     }
 });
