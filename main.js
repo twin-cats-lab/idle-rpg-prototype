@@ -190,6 +190,23 @@ function normalizeEquippedSkills(equippedSkills = {}, learnedSkillIds = defaultL
     return { active, passive };
 }
 
+function autoEquipAvailableSkills(character) {
+    ["active", "passive"].forEach((type) => {
+        const equipped = [...(character.equippedSkills[type] ?? [])];
+        const learned = learnedSkills(character, type).map((skill) => skill.id);
+
+        learned.forEach((skillId) => {
+            if (equipped.length >= 3 || equipped.includes(skillId)) {
+                return;
+            }
+
+            equipped.push(skillId);
+        });
+
+        character.equippedSkills[type] = equipped.slice(0, 3);
+    });
+}
+
 function normalizeSkillState(character, savedCharacter = {}) {
     const learnedSkillIds = uniqueSkillIds([
         ...defaultLearnedSkillIds(),
@@ -198,12 +215,31 @@ function normalizeSkillState(character, savedCharacter = {}) {
 
     character.learnedSkillIds = learnedSkillIds;
     character.equippedSkills = normalizeEquippedSkills(savedCharacter.equippedSkills ?? character.equippedSkills, learnedSkillIds);
+    autoEquipAvailableSkills(character);
+}
+
+function normalizeEquipmentState(character, savedCharacter = {}) {
+    const equipment = savedCharacter.equipment ?? character.equipment ?? {};
+    character.equipment = {
+        weapon: equipment.weapon ?? "",
+        armor: equipment.armor ?? "",
+        sub: equipment.sub ?? ""
+    };
+}
+
+function equipmentSlotDefinitions() {
+    return [
+        { id: "weapon", label: "武器", type: "武器" },
+        { id: "armor", label: "防具", type: "防具" },
+        { id: "sub", label: "サブ", type: "サブ装備" }
+    ];
 }
 
 function createInitialState() {
     gameData.characters.forEach((character) => {
         character.jobMastery = normalizeMastery(character.jobMastery);
         normalizeSkillState(character);
+        normalizeEquipmentState(character);
     });
 
     return {
@@ -245,6 +281,7 @@ function loadState() {
             character.jobId = byId(gameData.jobs, savedCharacter.jobId) ? savedCharacter.jobId : character.jobId;
             character.jobMastery = normalizeMastery(savedCharacter.jobMastery);
             normalizeSkillState(character, savedCharacter);
+            normalizeEquipmentState(character, savedCharacter);
         });
     }
 
@@ -291,7 +328,8 @@ function saveState() {
                 jobId: character.jobId,
                 jobMastery: character.jobMastery,
                 learnedSkillIds: character.learnedSkillIds,
-                equippedSkills: character.equippedSkills
+                equippedSkills: character.equippedSkills,
+                equipment: character.equipment
             })),
             parties: gameData.parties.map((party) => ({
                 id: party.id,
@@ -357,6 +395,7 @@ function learnEligibleSkills(character) {
     });
 
     newlyLearned.forEach((skill) => character.learnedSkillIds.push(skill.id));
+    autoEquipAvailableSkills(character);
 
     return newlyLearned;
 }
@@ -583,15 +622,26 @@ function equipmentSummary(equipment) {
     return `${equipment.name} / ${equipment.type} / ${equipment.rank} / 攻${equipment.attack} 防${equipment.defense} 魔${equipment.magic} 命${equipment.accuracy} 回${equipment.attacks} / ${equipment.element}${equipment.affix?.special ? ` / ${equipment.affix.special}` : ""}`;
 }
 
+function equippedBy(equipmentId) {
+    return gameData.characters.find((character) => {
+        normalizeEquipmentState(character);
+        return Object.values(character.equipment).includes(equipmentId);
+    });
+}
+
+function isEquipmentEquipped(equipmentId) {
+    return Boolean(equippedBy(equipmentId));
+}
+
 function sellUnprotectedEquipment() {
-    const selling = gameState.inventory.equipment.filter((equipment) => !equipment.protected);
+    const selling = gameState.inventory.equipment.filter((equipment) => !equipment.protected && !isEquipmentEquipped(equipment.id));
 
     if (selling.length === 0) {
         return;
     }
 
     const gold = selling.reduce((total, equipment) => total + equipment.sellValue, 0);
-    gameState.inventory.equipment = gameState.inventory.equipment.filter((equipment) => equipment.protected);
+    gameState.inventory.equipment = gameState.inventory.equipment.filter((equipment) => equipment.protected || isEquipmentEquipped(equipment.id));
     gameState.gold += gold;
     addLog(`倉庫で未保護装備${selling.length}個を売却し、${gold}Gを得ました。`);
     saveState();
@@ -608,6 +658,65 @@ function toggleEquipmentProtection(equipmentId) {
     equipment.protected = !equipment.protected;
     saveState();
     renderCurrentView();
+}
+
+function changeEquipment(characterId, slotId, equipmentId) {
+    const character = byId(gameData.characters, characterId);
+    const slot = equipmentSlotDefinitions().find((definition) => definition.id === slotId);
+    const equipment = equipmentId ? gameState.inventory.equipment.find((item) => item.id === equipmentId) : null;
+
+    if (!character || !slot) {
+        return;
+    }
+
+    if (equipment && equipment.type !== slot.type) {
+        renderCurrentView();
+        return;
+    }
+
+    const owner = equipment ? equippedBy(equipment.id) : null;
+    if (owner && owner.id !== character.id) {
+        renderCurrentView();
+        return;
+    }
+
+    normalizeEquipmentState(character);
+    character.equipment[slotId] = equipmentId || "";
+    saveState();
+    rerenderPreservingScroll();
+}
+
+function captureScrollState() {
+    return {
+        windowY: typeof window !== "undefined" ? window.scrollY : 0,
+        sheetTop: document.querySelector(".mobile-detail-sheet")?.scrollTop ?? 0
+    };
+}
+
+function restoreScrollState(scrollState) {
+    const restore = () => {
+        if (typeof window !== "undefined" && typeof window.scrollTo === "function") {
+            window.scrollTo(0, scrollState.windowY);
+        }
+
+        const sheet = document.querySelector(".mobile-detail-sheet");
+        if (sheet) {
+            sheet.scrollTop = scrollState.sheetTop;
+        }
+    };
+
+    if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(restore);
+        return;
+    }
+
+    setTimeout(restore, 0);
+}
+
+function rerenderPreservingScroll() {
+    const scrollState = captureScrollState();
+    renderCurrentView();
+    restoreScrollState(scrollState);
 }
 
 function personalityComment(character) {
@@ -821,7 +930,7 @@ function changeSkill(characterId, type, slotIndex, skillId) {
     const skill = skillId ? skillById(skillId) : null;
 
     if (skillId && (!skill || skill.type !== type || !character.learnedSkillIds.includes(skillId))) {
-        renderCurrentView();
+        rerenderPreservingScroll();
         return;
     }
 
@@ -829,14 +938,14 @@ function changeSkill(characterId, type, slotIndex, skillId) {
     const otherEquipped = equipped.filter((id, currentIndex) => currentIndex !== index);
 
     if (skillId && otherEquipped.includes(skillId)) {
-        renderCurrentView();
+        rerenderPreservingScroll();
         return;
     }
 
     equipped[index] = skillId || undefined;
     character.equippedSkills[type] = uniqueSkillIds(equipped).filter((id) => skillById(id)?.type === type).slice(0, 3);
     saveState();
-    renderCurrentView();
+    rerenderPreservingScroll();
 }
 
 function renderHome() {
@@ -1067,11 +1176,45 @@ function renderCharacterDetail(character, options = {}) {
                 }).join("")}
             </dl>
             ${renderSkillPanel(character)}
-            <h3 class="subheading">装備</h3>
-            <dl class="detail-list three-column">
-                ${equipmentSlots().map(([slot, item]) => `<div><dt>${slot}</dt><dd>${item}</dd></div>`).join("")}
-            </dl>
+            ${renderEquipmentPanel(character)}
         </article>
+    `;
+}
+
+function renderEquipmentPanel(character) {
+    normalizeEquipmentState(character);
+
+    return `
+        <section class="equipment-panel">
+            <h3 class="subheading">装備変更</h3>
+            <dl class="detail-list three-column">
+                ${equipmentSlotDefinitions().map((slot) => {
+                    const item = gameState.inventory.equipment.find((equipment) => equipment.id === character.equipment[slot.id]);
+                    return `<div><dt>${slot.label}</dt><dd>${item ? item.name : "未装備"}</dd></div>`;
+                }).join("")}
+            </dl>
+            <div class="equipment-slot-grid">
+                ${equipmentSlotDefinitions().map((slot) => renderEquipmentSelect(character, slot)).join("")}
+            </div>
+        </section>
+    `;
+}
+
+function renderEquipmentSelect(character, slot) {
+    const currentId = character.equipment[slot.id] ?? "";
+    const options = gameState.inventory.equipment.filter((equipment) => {
+        const owner = equippedBy(equipment.id);
+        return equipment.type === slot.type && (!owner || owner.id === character.id);
+    });
+
+    return `
+        <label>
+            ${slot.label}
+            <select data-action="change-equipment" data-character-id="${character.id}" data-equipment-slot="${slot.id}">
+                <option value="">未装備</option>
+                ${options.map((equipment) => `<option value="${equipment.id}" ${currentId === equipment.id ? "selected" : ""}>${equipment.protected ? "★ " : ""}${equipment.name}</option>`).join("")}
+            </select>
+        </label>
     `;
 }
 
@@ -1426,7 +1569,7 @@ function renderTown() {
 
 function renderWarehousePanel() {
     const equipment = gameState.inventory.equipment;
-    const unprotected = equipment.filter((item) => !item.protected);
+    const unprotected = equipment.filter((item) => !item.protected && !isEquipmentEquipped(item.id));
     const sellValue = unprotected.reduce((total, item) => total + item.sellValue, 0);
 
     return `
@@ -1447,7 +1590,7 @@ function renderWarehousePanel() {
                 ${equipment.length === 0 ? `<p>装備はまだありません。</p>` : equipment.map((item) => `
                     <article class="equipment-row">
                         <div>
-                            <strong>${item.protected ? "★ " : ""}${item.name}</strong>
+                            <strong>${item.protected ? "★ " : ""}${item.name} ${isEquipmentEquipped(item.id) ? "（装備中）" : ""}</strong>
                             <p>${equipmentSummary(item)}</p>
                         </div>
                         <button class="secondary-button" type="button" data-action="toggle-protect" data-equipment-id="${item.id}">${item.protected ? "保護解除" : "★保護"}</button>
@@ -1664,6 +1807,10 @@ app.addEventListener("change", (event) => {
 
     if (control.dataset.action === "change-skill") {
         changeSkill(control.dataset.characterId, control.dataset.skillType, control.dataset.slot, control.value);
+    }
+
+    if (control.dataset.action === "change-equipment") {
+        changeEquipment(control.dataset.characterId, control.dataset.equipmentSlot, control.value);
     }
 });
 

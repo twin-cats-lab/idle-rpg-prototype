@@ -546,6 +546,13 @@ select:disabled {
     color: var(--accent-strong);
 }
 
+.equipment-slot-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 12px;
+}
+
 .log-panel {
     margin-top: 16px;
 }
@@ -726,6 +733,7 @@ th {
     .adventure-layout,
     .formation-grid,
     .skill-slot-grid,
+    .equipment-slot-grid,
     .detail-list.two-column,
     .detail-list.three-column {
         grid-template-columns: 1fr;
