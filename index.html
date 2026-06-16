@@ -7,11 +7,24 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <header class="app-header">
+        <div>
+            <p class="eyebrow">Twin Cats Laboratory</p>
+            <h1>双子猫研究所 RPG</h1>
+        </div>
+        <div class="status-pill">Prototype v0.4 foundation</div>
+    </header>
 
-    <h1>双子猫研究所</h1>
-    <h2>Idle RPG Prototype</h2>
+    <nav class="main-nav" aria-label="メインメニュー">
+        <button class="nav-button active" type="button" data-view="home">ホーム</button>
+        <button class="nav-button" type="button" data-view="characters">キャラクター</button>
+        <button class="nav-button" type="button" data-view="parties">パーティ</button>
+        <button class="nav-button" type="button" data-view="adventure">冒険</button>
+        <button class="nav-button" type="button" data-view="codex">図鑑</button>
+        <button class="nav-button" type="button" data-view="town">街</button>
+    </nav>
 
-    <button id="testButton">クリックテスト</button>
+    <main id="app" class="app-shell" aria-live="polite"></main>
 
     <script src="main.js"></script>
 </body>

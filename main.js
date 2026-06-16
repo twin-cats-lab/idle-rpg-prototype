@@ -1,3 +1,564 @@
-document.getElementById("testButton").addEventListener("click", () => {
-    alert("双子猫研究所 RPG 起動テスト成功！");
+const STORAGE_KEY = "twinCatsIdleRpg.stage2";
+
+const gameData = {
+    jobs: [
+        { id: "rookie", name: "ひよっこ", tier: "初期職", note: "全能力平均。Lv5で転職可能。" },
+        { id: "fighter", name: "戦士", tier: "基本職", note: "前衛で攻撃を担う。" },
+        { id: "guardian", name: "守護者", tier: "基本職", note: "味方を守る耐久型。" },
+        { id: "scout", name: "斥候", tier: "基本職", note: "探索と先制に優れる。" },
+        { id: "mage", name: "魔術師", tier: "基本職", note: "魔法攻撃を扱う後衛職。" },
+        { id: "shaman", name: "祈祷師", tier: "基本職", note: "回復と支援を担当する。" },
+        { id: "hunter", name: "狩人", tier: "基本職", note: "命中と種族対策に長ける。" }
+    ],
+    personalities: [
+        { id: "diligent", name: "努力家", tendency: "修行" },
+        { id: "careful", name: "慎重", tendency: "安全" },
+        { id: "curious", name: "好奇心旺盛", tendency: "探索" },
+        { id: "bold", name: "大胆", tendency: "ボス攻略" },
+        { id: "kind", name: "世話焼き", tendency: "支援" }
+    ],
+    characters: [
+        { id: "chara-01", name: "ミナ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["diligent", "kind"], position: "前衛" },
+        { id: "chara-02", name: "トウマ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["bold", "curious"], position: "前衛" },
+        { id: "chara-03", name: "セリカ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["careful", "diligent"], position: "後衛" },
+        { id: "chara-04", name: "レン", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["curious", "careful"], position: "前衛" },
+        { id: "chara-05", name: "ユイ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["kind", "careful"], position: "後衛" },
+        { id: "chara-06", name: "カイ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", personalities: ["bold", "diligent"], position: "後衛" }
+    ],
+    parties: [
+        {
+            id: "party-01",
+            name: "若枝隊",
+            leaderId: "chara-01",
+            memberIds: ["chara-01", "chara-02", "chara-03"],
+            formation: { front: ["chara-01", "chara-02"], back: ["chara-03"] },
+            artifact: "世界樹の若枝"
+        },
+        {
+            id: "party-02",
+            name: "羅針盤隊",
+            leaderId: "chara-04",
+            memberIds: ["chara-04", "chara-05", "chara-06"],
+            formation: { front: ["chara-04"], back: ["chara-05", "chara-06"] },
+            artifact: "黄金の羅針盤"
+        }
+    ],
+    dungeons: [
+        {
+            id: "forest",
+            name: "薄明の森",
+            knowledge: 20,
+            recommendedLevel: 1,
+            durationSeconds: 30,
+            reward: { experience: 35, gold: 18 },
+            monsterIds: ["slime", "wild-rat"]
+        },
+        {
+            id: "ruins",
+            name: "古い水路",
+            knowledge: 5,
+            recommendedLevel: 2,
+            durationSeconds: 60,
+            reward: { experience: 55, gold: 32 },
+            monsterIds: ["cave-bat", "slime"]
+        }
+    ],
+    monsters: [
+        { id: "slime", name: "スライム", race: "不明", codexLevel: 1, habitat: "薄明の森" },
+        { id: "wild-rat", name: "野ねずみ", race: "動物", codexLevel: 1, habitat: "薄明の森" },
+        { id: "cave-bat", name: "洞窟コウモリ", race: "動物", codexLevel: 0, habitat: "古い水路" }
+    ]
+};
+
+const app = document.getElementById("app");
+const navButtons = document.querySelectorAll(".nav-button");
+
+let currentView = "home";
+let gameState = createInitialState();
+
+const byId = (collection, id) => collection.find((item) => item.id === id);
+const namesFromIds = (collection, ids) => ids.map((id) => byId(collection, id)?.name ?? "不明").join("、");
+
+function createInitialState() {
+    return {
+        gold: 0,
+        adventures: [],
+        logs: ["冒険者たちが街に集まりました。"]
+    };
+}
+
+function loadState() {
+    const saved = readSavedState();
+
+    if (!saved) {
+        return;
+    }
+
+    gameState = {
+        gold: Number(saved.gold) || 0,
+        adventures: Array.isArray(saved.adventures) ? saved.adventures : [],
+        logs: Array.isArray(saved.logs) && saved.logs.length > 0 ? saved.logs : gameState.logs
+    };
+
+    if (Array.isArray(saved.characters)) {
+        saved.characters.forEach((savedCharacter) => {
+            const character = byId(gameData.characters, savedCharacter.id);
+
+            if (!character) {
+                return;
+            }
+
+            character.level = Number(savedCharacter.level) || character.level;
+            character.experience = Number(savedCharacter.experience) || 0;
+            character.totalExperience = Number(savedCharacter.totalExperience) || 0;
+        });
+    }
+}
+
+function readSavedState() {
+    try {
+        const rawState = localStorage.getItem(STORAGE_KEY);
+        return rawState ? JSON.parse(rawState) : null;
+    } catch (error) {
+        console.warn("保存データを読み込めませんでした。", error);
+        return null;
+    }
+}
+
+function saveState() {
+    try {
+        const stateToSave = {
+            gold: gameState.gold,
+            adventures: gameState.adventures,
+            logs: gameState.logs,
+            characters: gameData.characters.map((character) => ({
+                id: character.id,
+                level: character.level,
+                experience: character.experience,
+                totalExperience: character.totalExperience
+            }))
+        };
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+    } catch (error) {
+        console.warn("保存に失敗しました。", error);
+    }
+}
+
+function jobName(id) {
+    return byId(gameData.jobs, id)?.name ?? "不明";
+}
+
+function personalityNames(ids) {
+    return ids.map((id) => byId(gameData.personalities, id)?.name ?? "不明").join(" / ");
+}
+
+function expToNextLevel(level) {
+    return level * 100;
+}
+
+function partyAdventure(partyId) {
+    return gameState.adventures.find((adventure) => adventure.partyId === partyId);
+}
+
+function adventureStatus(adventure) {
+    if (!adventure) {
+        return "待機中";
+    }
+
+    return Date.now() >= adventure.returnAt ? "帰還済み" : "冒険中";
+}
+
+function remainingTimeText(returnAt) {
+    const remainingSeconds = Math.max(0, Math.ceil((returnAt - Date.now()) / 1000));
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+
+    if (remainingSeconds === 0) {
+        return "帰還済み";
+    }
+
+    if (minutes === 0) {
+        return `${seconds}秒`;
+    }
+
+    return `${minutes}分${seconds.toString().padStart(2, "0")}秒`;
+}
+
+function formatDuration(seconds) {
+    return seconds >= 60 ? `${Math.floor(seconds / 60)}分${seconds % 60 === 0 ? "" : `${seconds % 60}秒`}` : `${seconds}秒`;
+}
+
+function addLog(message) {
+    const timestamp = new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    gameState.logs = [`${timestamp} ${message}`, ...gameState.logs].slice(0, 12);
+}
+
+function startAdventure(partyId, dungeonId) {
+    if (partyAdventure(partyId)) {
+        return;
+    }
+
+    const party = byId(gameData.parties, partyId);
+    const dungeon = byId(gameData.dungeons, dungeonId);
+
+    if (!party || !dungeon) {
+        return;
+    }
+
+    const now = Date.now();
+    gameState.adventures.push({
+        id: `adv-${now}-${partyId}`,
+        partyId,
+        dungeonId,
+        departedAt: now,
+        returnAt: now + dungeon.durationSeconds * 1000
+    });
+
+    addLog(`${party.name}が${dungeon.name}へ出発しました。`);
+    saveState();
+    renderCurrentView();
+}
+
+function claimReward(adventureId) {
+    const adventure = gameState.adventures.find((item) => item.id === adventureId);
+
+    if (!adventure || Date.now() < adventure.returnAt) {
+        return;
+    }
+
+    const party = byId(gameData.parties, adventure.partyId);
+    const dungeon = byId(gameData.dungeons, adventure.dungeonId);
+
+    if (!party || !dungeon) {
+        return;
+    }
+
+    const levelMessages = [];
+    party.memberIds.forEach((characterId) => {
+        const character = byId(gameData.characters, characterId);
+
+        if (!character) {
+            return;
+        }
+
+        character.experience += dungeon.reward.experience;
+        character.totalExperience += dungeon.reward.experience;
+
+        while (character.experience >= expToNextLevel(character.level)) {
+            character.experience -= expToNextLevel(character.level);
+            character.level += 1;
+            levelMessages.push(`${character.name} Lv${character.level}`);
+        }
+    });
+
+    gameState.gold += dungeon.reward.gold;
+    gameState.adventures = gameState.adventures.filter((item) => item.id !== adventureId);
+
+    const rewardMessage = `${party.name}が${dungeon.name}から帰還。経験値${dungeon.reward.experience}、${dungeon.reward.gold}Gを獲得しました。`;
+    addLog(levelMessages.length > 0 ? `${rewardMessage} レベルアップ: ${levelMessages.join("、")}` : rewardMessage);
+    saveState();
+    renderCurrentView();
+}
+
+function renderHome() {
+    const activeCount = gameState.adventures.filter((adventure) => Date.now() < adventure.returnAt).length;
+    const returnedCount = gameState.adventures.length - activeCount;
+
+    app.innerHTML = `
+        <section class="hero-panel">
+            <div>
+                <p class="eyebrow">放置RPG 管理画面</p>
+                <h2>冒険者たちの準備状況</h2>
+                <p>出発、待機、帰還、報酬受取までの最小ループが動く状態です。進行状況はブラウザに保存されます。</p>
+            </div>
+            <div class="summary-grid">
+                ${summaryItem("キャラクター", `${gameData.characters.length} / 20`)}
+                ${summaryItem("パーティ", `${gameData.parties.length} / 10`)}
+                ${summaryItem("所持ゴールド", `${gameState.gold} G`)}
+                ${summaryItem("帰還済み", `${returnedCount} 件`)}
+                ${summaryItem("冒険中", `${activeCount} 件`)}
+                ${summaryItem("ダンジョン", `${gameData.dungeons.length} 件`)}
+            </div>
+        </section>
+        ${renderLogPanel()}
+    `;
+}
+
+function summaryItem(label, value) {
+    return `<div class="summary-item"><span>${label}</span><strong>${value}</strong></div>`;
+}
+
+function renderCharacters() {
+    app.innerHTML = `
+        <section class="section-heading">
+            <h2>キャラクター</h2>
+            <p>帰還時に経験値を受け取り、必要経験値に達していればまとめてレベルアップします。</p>
+        </section>
+        <section class="card-grid">
+            ${gameData.characters.map((character) => `
+                <article class="card">
+                    <div class="card-title-row">
+                        <h3>${character.name}</h3>
+                        <span class="tag">Lv${character.level}</span>
+                    </div>
+                    <dl class="detail-list">
+                        <div><dt>職業</dt><dd>${jobName(character.jobId)}</dd></div>
+                        <div><dt>性格</dt><dd>${personalityNames(character.personalities)}</dd></div>
+                        <div><dt>配置</dt><dd>${character.position}</dd></div>
+                        <div><dt>経験値</dt><dd>${character.experience} / ${expToNextLevel(character.level)}</dd></div>
+                    </dl>
+                </article>
+            `).join("")}
+        </section>
+    `;
+}
+
+function renderParties() {
+    app.innerHTML = `
+        <section class="section-heading">
+            <h2>パーティ</h2>
+            <p>冒険中のパーティは、報酬受取が終わるまで再出発できません。</p>
+        </section>
+        <section class="stack">
+            ${gameData.parties.map((party) => renderPartyCard(party)).join("")}
+        </section>
+    `;
+}
+
+function renderPartyCard(party) {
+    const leader = byId(gameData.characters, party.leaderId);
+    const adventure = partyAdventure(party.id);
+    const status = adventureStatus(adventure);
+    const dungeon = adventure ? byId(gameData.dungeons, adventure.dungeonId) : null;
+
+    return `
+        <article class="wide-card">
+            <div class="card-title-row">
+                <h3>${party.name}</h3>
+                <span class="tag">${status}</span>
+            </div>
+            <dl class="detail-list two-column">
+                <div><dt>リーダー</dt><dd>${leader.name}</dd></div>
+                <div><dt>神器</dt><dd>${party.artifact}</dd></div>
+                <div><dt>前衛</dt><dd>${namesFromIds(gameData.characters, party.formation.front)}</dd></div>
+                <div><dt>後衛</dt><dd>${namesFromIds(gameData.characters, party.formation.back)}</dd></div>
+                <div><dt>現在地</dt><dd>${dungeon ? dungeon.name : "街"}</dd></div>
+                <div><dt>残り時間</dt><dd>${adventure ? remainingTimeText(adventure.returnAt) : "-"}</dd></div>
+            </dl>
+        </article>
+    `;
+}
+
+function renderAdventure() {
+    app.innerHTML = `
+        <section class="section-heading">
+            <h2>冒険</h2>
+            <p>パーティとダンジョンを選んで出発します。時間が来ると帰還済みになり、報酬を受け取れます。</p>
+        </section>
+        <section class="adventure-layout">
+            <article class="wide-card">
+                <h3>出発準備</h3>
+                <div class="form-grid">
+                    <label>
+                        パーティ
+                        <select id="partySelect">
+                            ${gameData.parties.map((party) => {
+                                const disabled = partyAdventure(party.id) ? "disabled" : "";
+                                return `<option value="${party.id}" ${disabled}>${party.name}${disabled ? "（冒険中）" : ""}</option>`;
+                            }).join("")}
+                        </select>
+                    </label>
+                    <label>
+                        ダンジョン
+                        <select id="dungeonSelect">
+                            ${gameData.dungeons.map((dungeon) => `
+                                <option value="${dungeon.id}">${dungeon.name}（${formatDuration(dungeon.durationSeconds)}）</option>
+                            `).join("")}
+                        </select>
+                    </label>
+                    <button class="primary-button" type="button" data-action="start-adventure">出発</button>
+                </div>
+            </article>
+            <section class="stack">
+                ${gameData.dungeons.map((dungeon) => renderDungeonCard(dungeon)).join("")}
+            </section>
+            <section class="stack">
+                ${renderAdventureStatusCards()}
+            </section>
+        </section>
+    `;
+}
+
+function renderDungeonCard(dungeon) {
+    return `
+        <article class="card">
+            <div class="card-title-row">
+                <h3>${dungeon.name}</h3>
+                <span class="tag">推奨Lv${dungeon.recommendedLevel}</span>
+            </div>
+            <dl class="detail-list">
+                <div><dt>帰還まで</dt><dd>${formatDuration(dungeon.durationSeconds)}</dd></div>
+                <div><dt>報酬</dt><dd>経験値${dungeon.reward.experience} / ${dungeon.reward.gold}G</dd></div>
+                <div><dt>知識度</dt><dd>${dungeon.knowledge}%</dd></div>
+                <div><dt>確認済み魔物</dt><dd>${namesFromIds(gameData.monsters, dungeon.monsterIds)}</dd></div>
+            </dl>
+        </article>
+    `;
+}
+
+function renderAdventureStatusCards() {
+    if (gameState.adventures.length === 0) {
+        return `
+            <article class="wide-card">
+                <h3>進行中の冒険</h3>
+                <p>現在、冒険中のパーティはありません。</p>
+            </article>
+        `;
+    }
+
+    return gameState.adventures.map((adventure) => {
+        const party = byId(gameData.parties, adventure.partyId);
+        const dungeon = byId(gameData.dungeons, adventure.dungeonId);
+        const returned = Date.now() >= adventure.returnAt;
+
+        return `
+            <article class="wide-card">
+                <div class="card-title-row">
+                    <h3>${party.name} / ${dungeon.name}</h3>
+                    <span class="tag">${returned ? "帰還済み" : "冒険中"}</span>
+                </div>
+                <dl class="detail-list two-column">
+                    <div><dt>出発</dt><dd>${new Date(adventure.departedAt).toLocaleTimeString("ja-JP")}</dd></div>
+                    <div><dt>帰還予定</dt><dd>${new Date(adventure.returnAt).toLocaleTimeString("ja-JP")}</dd></div>
+                    <div><dt>残り時間</dt><dd>${remainingTimeText(adventure.returnAt)}</dd></div>
+                    <div><dt>予定報酬</dt><dd>経験値${dungeon.reward.experience} / ${dungeon.reward.gold}G</dd></div>
+                </dl>
+                ${returned ? `<button class="primary-button reward-button" type="button" data-action="claim-reward" data-adventure-id="${adventure.id}">報酬を受け取る</button>` : ""}
+            </article>
+        `;
+    }).join("");
+}
+
+function renderCodex() {
+    app.innerHTML = `
+        <section class="section-heading">
+            <h2>図鑑</h2>
+            <p>段階2では図鑑Lv上昇はまだ行いません。</p>
+        </section>
+        <section class="table-panel">
+            <table>
+                <thead>
+                    <tr>
+                        <th>名前</th>
+                        <th>種族</th>
+                        <th>図鑑Lv</th>
+                        <th>生息地</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${gameData.monsters.map((monster) => `
+                        <tr>
+                            <td>${monster.codexLevel === 0 ? "未発見" : monster.name}</td>
+                            <td>${monster.codexLevel === 0 ? "-" : monster.race}</td>
+                            <td>Lv${monster.codexLevel}</td>
+                            <td>${monster.codexLevel === 0 ? "-" : monster.habitat}</td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        </section>
+    `;
+}
+
+function renderTown() {
+    app.innerHTML = `
+        <section class="section-heading">
+            <h2>街</h2>
+            <p>街施設の入口です。訓練所やスキル付け替えは今後の段階で実装します。</p>
+        </section>
+        <section class="card-grid">
+            ${[
+                ["訓練所", "出撃していないキャラの経験値獲得場所。"],
+                ["ギルド", "キャラクターとパーティの管理拠点。"],
+                ["書庫", "スキル本や図鑑情報の確認場所。"],
+                ["鍛冶屋", "装備の改造、再抽選、特殊付与を扱う予定。"]
+            ].map(([name, description]) => `
+                <article class="card">
+                    <h3>${name}</h3>
+                    <p>${description}</p>
+                </article>
+            `).join("")}
+        </section>
+    `;
+}
+
+function renderLogPanel() {
+    return `
+        <section class="table-panel log-panel">
+            <div class="card-title-row">
+                <h2>冒険ログ</h2>
+                <span class="tag">${gameState.logs.length}件</span>
+            </div>
+            <ul class="log-list">
+                ${gameState.logs.map((log) => `<li>${log}</li>`).join("")}
+            </ul>
+        </section>
+    `;
+}
+
+const renderers = {
+    home: renderHome,
+    characters: renderCharacters,
+    parties: renderParties,
+    adventure: renderAdventure,
+    codex: renderCodex,
+    town: renderTown
+};
+
+function switchView(viewName) {
+    currentView = viewName;
+    navButtons.forEach((button) => {
+        button.classList.toggle("active", button.dataset.view === viewName);
+    });
+
+    renderCurrentView();
+}
+
+function renderCurrentView() {
+    renderers[currentView]();
+}
+
+navButtons.forEach((button) => {
+    button.addEventListener("click", () => switchView(button.dataset.view));
 });
+
+app.addEventListener("click", (event) => {
+    const actionButton = event.target.closest("[data-action]");
+
+    if (!actionButton) {
+        return;
+    }
+
+    if (actionButton.dataset.action === "start-adventure") {
+        const partyId = document.getElementById("partySelect")?.value;
+        const dungeonId = document.getElementById("dungeonSelect")?.value;
+
+        if (partyId && dungeonId) {
+            startAdventure(partyId, dungeonId);
+        }
+    }
+
+    if (actionButton.dataset.action === "claim-reward") {
+        claimReward(actionButton.dataset.adventureId);
+    }
+});
+
+loadState();
+switchView("home");
+
+setInterval(() => {
+    if (currentView === "home" || currentView === "parties" || currentView === "adventure") {
+        renderCurrentView();
+    }
+}, 1000);
