@@ -595,6 +595,61 @@ select:disabled {
     color: #ee9a9a;
 }
 
+.badge-loot {
+    border-color: rgba(240, 201, 121, 0.65);
+    color: var(--accent-strong);
+}
+
+.badge-sell {
+    border-color: rgba(185, 181, 173, 0.55);
+    color: var(--muted);
+}
+
+.warehouse-panel {
+    margin-top: 16px;
+}
+
+.warehouse-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    border-top: 1px solid var(--line);
+    margin-top: 12px;
+    padding-top: 14px;
+}
+
+.warehouse-actions p {
+    margin-bottom: 0;
+}
+
+.equipment-list {
+    display: grid;
+    gap: 10px;
+}
+
+.equipment-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    background: var(--panel-soft);
+}
+
+.equipment-row p {
+    margin-bottom: 0;
+    font-size: 0.9rem;
+}
+
+.material-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -659,6 +714,11 @@ th {
 
     .log-badge {
         min-width: 44px;
+    }
+
+    .warehouse-actions,
+    .equipment-row {
+        grid-template-columns: 1fr;
     }
 
     .hero-panel,

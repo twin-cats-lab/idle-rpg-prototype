@@ -87,9 +87,24 @@ const gameData = {
         }
     ],
     monsters: [
-        { id: "slime", name: "スライム", race: "不明", codexLevel: 1, habitat: "薄明の森" },
-        { id: "wild-rat", name: "野ねずみ", race: "動物", codexLevel: 1, habitat: "薄明の森" },
-        { id: "cave-bat", name: "洞窟コウモリ", race: "動物", codexLevel: 0, habitat: "古い水路" }
+        { id: "slime", name: "スライム", race: "不明", codexLevel: 1, habitat: "薄明の森", hp: 18, attack: 5, defense: 2, score: 18, equipmentDrops: ["training-sword", "cloth-vest"], materialDrops: ["ぷるぷる粘液"] },
+        { id: "wild-rat", name: "森ねずみ", race: "動物", codexLevel: 1, habitat: "薄明の森", hp: 22, attack: 7, defense: 2, score: 24, equipmentDrops: ["short-bow", "leather-guard"], materialDrops: ["小さな毛皮"] },
+        { id: "cave-bat", name: "洞窟コウモリ", race: "動物", codexLevel: 0, habitat: "古い水路", hp: 28, attack: 9, defense: 3, score: 34, equipmentDrops: ["iron-blade", "focus-charm"], materialDrops: ["薄い翼膜"] }
+    ],
+    equipmentTemplates: [
+        { id: "training-sword", name: "訓練剣", type: "武器", rank: "N", attack: 5, defense: 0, magic: 0, accuracy: 2, attacks: 1, element: "物理", sellValue: 12 },
+        { id: "iron-blade", name: "鉄の刃", type: "武器", rank: "R", attack: 8, defense: 0, magic: 0, accuracy: 1, attacks: 1, element: "物理", sellValue: 28 },
+        { id: "short-bow", name: "短弓", type: "武器", rank: "N", attack: 4, defense: 0, magic: 0, accuracy: 6, attacks: 1, element: "物理", sellValue: 16 },
+        { id: "cloth-vest", name: "布のベスト", type: "防具", rank: "N", attack: 0, defense: 4, magic: 0, accuracy: 0, attacks: 0, element: "無", sellValue: 10 },
+        { id: "leather-guard", name: "革の守り", type: "防具", rank: "N", attack: 0, defense: 6, magic: 0, accuracy: 1, attacks: 0, element: "無", sellValue: 18 },
+        { id: "focus-charm", name: "集中のお守り", type: "サブ装備", rank: "R", attack: 0, defense: 1, magic: 5, accuracy: 3, attacks: 0, element: "光", sellValue: 30 }
+    ],
+    affixes: [
+        { id: "sharp", prefix: "鋭い", note: "攻撃+10%", apply: { attackMultiplier: 1.1 } },
+        { id: "precise", prefix: "精密な", note: "命中+10%", apply: { accuracyMultiplier: 1.1 } },
+        { id: "dual", prefix: "双撃の", note: "攻撃回数+1、攻撃-20%", apply: { attacksAdd: 1, attackMultiplier: 0.8 } },
+        { id: "beast-hunter", prefix: "獣狩りの", note: "動物特効+20%", apply: { special: "動物特効+20%" } },
+        { id: "lucky", prefix: "幸運の", note: "ドロップ率+10%", apply: { special: "ドロップ率+10%" } }
     ]
 };
 
@@ -194,6 +209,7 @@ function createInitialState() {
     return {
         gold: 0,
         adventures: [],
+        inventory: { equipment: [], materials: [] },
         logs: ["冒険者たちが街に集まりました。"]
     };
 }
@@ -208,6 +224,10 @@ function loadState() {
     gameState = {
         gold: Number(saved.gold) || 0,
         adventures: Array.isArray(saved.adventures) ? saved.adventures : [],
+        inventory: {
+            equipment: Array.isArray(saved.inventory?.equipment) ? saved.inventory.equipment : [],
+            materials: Array.isArray(saved.inventory?.materials) ? saved.inventory.materials : []
+        },
         logs: Array.isArray(saved.logs) && saved.logs.length > 0 ? saved.logs : gameState.logs
     };
 
@@ -261,6 +281,7 @@ function saveState() {
         const stateToSave = {
             gold: gameState.gold,
             adventures: gameState.adventures,
+            inventory: gameState.inventory,
             logs: gameState.logs,
             characters: gameData.characters.map((character) => ({
                 id: character.id,
@@ -435,6 +456,160 @@ function partyLogName(party) {
     return `第${index + 1}パーティ・${party.name}`;
 }
 
+function randomFrom(items) {
+    return items[Math.floor(Math.random() * items.length)];
+}
+
+function partyPower(party) {
+    return party.memberIds.reduce((total, characterId) => {
+        const character = byId(gameData.characters, characterId);
+        if (!character) {
+            return total;
+        }
+
+        const mastery = masteryValue(character, character.jobId);
+        return total + character.level * 12 + Math.floor(mastery / 3) + (character.learnedSkillIds?.length ?? 0);
+    }, 0);
+}
+
+function createEquipmentDrop(templateId) {
+    const template = byId(gameData.equipmentTemplates, templateId);
+
+    if (!template) {
+        return null;
+    }
+
+    const affix = Math.random() < 0.25 ? randomFrom(gameData.affixes) : null;
+    const equipment = {
+        id: `eq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        templateId: template.id,
+        name: affix ? `${affix.prefix}${template.name}` : template.name,
+        baseName: template.name,
+        type: template.type,
+        rank: template.rank,
+        attack: template.attack,
+        defense: template.defense,
+        magic: template.magic,
+        accuracy: template.accuracy,
+        attacks: template.attacks,
+        element: template.element,
+        protected: false,
+        sellValue: template.sellValue,
+        affix: affix ? { id: affix.id, name: affix.prefix, note: affix.note, special: affix.apply.special ?? "" } : null
+    };
+
+    if (affix?.apply.attackMultiplier) {
+        equipment.attack = Math.max(0, Math.round(equipment.attack * affix.apply.attackMultiplier));
+    }
+
+    if (affix?.apply.accuracyMultiplier) {
+        equipment.accuracy = Math.max(0, Math.round(equipment.accuracy * affix.apply.accuracyMultiplier));
+    }
+
+    if (affix?.apply.attacksAdd) {
+        equipment.attacks += affix.apply.attacksAdd;
+    }
+
+    return equipment;
+}
+
+function addMaterial(name, quantity = 1) {
+    const existing = gameState.inventory.materials.find((material) => material.name === name);
+
+    if (existing) {
+        existing.quantity += quantity;
+        return;
+    }
+
+    gameState.inventory.materials.push({ name, quantity });
+}
+
+function createBattleResult(party, dungeon) {
+    const power = partyPower(party);
+    const steps = [];
+    const equipmentDrops = [];
+    const materialDrops = [];
+    let victories = 0;
+
+    dungeon.monsterIds.forEach((monsterId, index) => {
+        const monster = byId(gameData.monsters, monsterId);
+
+        if (!monster) {
+            return;
+        }
+
+        const roomName = `${index + 1}部屋目`;
+        const requiredScore = Math.round(monster.score * (0.85 + Math.random() * 0.35));
+        const victory = power >= requiredScore;
+        steps.push({ badge: roomName, text: `${roomName}: ${monster.name}と遭遇。${victory ? "勝利" : "苦戦しながら撤退判断"}` });
+
+        if (!victory) {
+            return;
+        }
+
+        victories += 1;
+        const dropBonus = party.memberIds.some((characterId) => {
+            const character = byId(gameData.characters, characterId);
+            return character?.equippedSkills?.passive?.includes("beast-eye");
+        }) ? 0.05 : 0;
+
+        if (Math.random() < 0.65 + dropBonus) {
+            const equipment = createEquipmentDrop(randomFrom(monster.equipmentDrops));
+            if (equipment) {
+                equipmentDrops.push(equipment);
+                steps.push({ badge: "装備", text: `${equipment.name}を入手。` });
+            }
+        }
+
+        if (Math.random() < 0.8 + dropBonus) {
+            const materialName = randomFrom(monster.materialDrops);
+            materialDrops.push(materialName);
+            steps.push({ badge: "素材", text: `${materialName}を入手。` });
+        }
+    });
+
+    return {
+        power,
+        victories,
+        totalBattles: dungeon.monsterIds.length,
+        outcome: victories === dungeon.monsterIds.length ? "踏破" : victories > 0 ? "一部勝利" : "撤退",
+        steps,
+        equipmentDrops,
+        materialDrops
+    };
+}
+
+function equipmentSummary(equipment) {
+    return `${equipment.name} / ${equipment.type} / ${equipment.rank} / 攻${equipment.attack} 防${equipment.defense} 魔${equipment.magic} 命${equipment.accuracy} 回${equipment.attacks} / ${equipment.element}${equipment.affix?.special ? ` / ${equipment.affix.special}` : ""}`;
+}
+
+function sellUnprotectedEquipment() {
+    const selling = gameState.inventory.equipment.filter((equipment) => !equipment.protected);
+
+    if (selling.length === 0) {
+        return;
+    }
+
+    const gold = selling.reduce((total, equipment) => total + equipment.sellValue, 0);
+    gameState.inventory.equipment = gameState.inventory.equipment.filter((equipment) => equipment.protected);
+    gameState.gold += gold;
+    addLog(`倉庫で未保護装備${selling.length}個を売却し、${gold}Gを得ました。`);
+    saveState();
+    renderCurrentView();
+}
+
+function toggleEquipmentProtection(equipmentId) {
+    const equipment = gameState.inventory.equipment.find((item) => item.id === equipmentId);
+
+    if (!equipment) {
+        return;
+    }
+
+    equipment.protected = !equipment.protected;
+    saveState();
+    renderCurrentView();
+}
+
 function personalityComment(character) {
     const comments = {
         careful: "足跡を確認しながら進んだ",
@@ -451,7 +626,7 @@ function adventureItemName(dungeonId) {
     return dungeonId === "ruins" ? "水路の古銭" : "森露の小瓶";
 }
 
-function createAdventureReport(party, dungeon, levelMessages) {
+function createAdventureReport(party, dungeon, levelMessages, battleResult) {
     const leader = byId(gameData.characters, party.leaderId) ?? byId(gameData.characters, party.memberIds[0]);
     const members = party.memberIds.map((id) => byId(gameData.characters, id)).filter(Boolean);
     const roomActors = [leader, ...members.filter((member) => member.id !== leader?.id)];
@@ -465,15 +640,19 @@ function createAdventureReport(party, dungeon, levelMessages) {
         mastery: dungeon.reward.mastery,
         gold: dungeon.reward.gold,
         itemName,
+        battleResult,
+        equipmentDrops: battleResult.equipmentDrops,
+        materialDrops: battleResult.materialDrops,
         levelMessages,
         currentStep: 0,
         steps: [
             { badge: "出発", text: `${party.name}は${dungeon.name}へ向けて街を出た。` },
             { badge: "到着", text: `${leader?.name ?? "リーダー"}が入口の様子を見て、進む順番を決めた。` },
-            { badge: "1部屋目", text: `${roomActors[0]?.name ?? "仲間"}は${personalityComment(roomActors[0])}。` },
-            { badge: "2部屋目", text: `${roomActors[1]?.name ?? "仲間"}は${personalityComment(roomActors[1] ?? roomActors[0])}。` },
-            { badge: "最終部屋", text: `${roomActors[2]?.name ?? "全員"}は小さな宝箱を見つけ、${itemName}を持ち帰った。` },
-            { badge: "帰還", text: `${party.name}は無事に帰還した。報酬を整理しよう。` }
+            ...battleResult.steps.map((step, index) => ({
+                badge: step.badge,
+                text: `${step.text} ${roomActors[index % Math.max(roomActors.length, 1)]?.name ?? "仲間"}は${personalityComment(roomActors[index % Math.max(roomActors.length, 1)])}。`
+            })),
+            { badge: battleResult.outcome === "撤退" ? "撤退" : "帰還", text: `${party.name}は${battleResult.outcome}。報酬を整理しよう。` }
         ]
     };
 }
@@ -518,6 +697,10 @@ function claimReward(adventureId) {
         return;
     }
 
+    const battleResult = createBattleResult(party, dungeon);
+    battleResult.equipmentDrops.forEach((equipment) => gameState.inventory.equipment.push(equipment));
+    battleResult.materialDrops.forEach((materialName) => addMaterial(materialName));
+
     const levelMessages = [];
     const skillMessages = [];
     party.memberIds.forEach((characterId) => {
@@ -545,11 +728,14 @@ function claimReward(adventureId) {
     gameState.adventures = gameState.adventures.filter((item) => item.id !== adventureId);
 
     const rewardMessage = `${partyLogName(party)}が${dungeon.name}から帰還。経験値${dungeon.reward.experience}、熟練度${dungeon.reward.mastery}、${dungeon.reward.gold}Gを獲得しました。`;
-    lastAdventureReport = createAdventureReport(party, dungeon, levelMessages);
+    lastAdventureReport = createAdventureReport(party, dungeon, levelMessages, battleResult);
     const growthMessages = [
         levelMessages.length > 0 ? `レベルアップ: ${levelMessages.join("、")}` : "",
         skillMessages.length > 0 ? `スキル習得: ${skillMessages.join("、")}` : ""
     ].filter(Boolean).join(" / ");
+    if (battleResult.equipmentDrops.length > 0 || battleResult.materialDrops.length > 0) {
+        addLog(`${partyLogName(party)}の戦利品: ${[...battleResult.equipmentDrops.map((equipment) => equipment.name), ...battleResult.materialDrops].join("、")}`);
+    }
     addLog(growthMessages ? `${rewardMessage} ${growthMessages}` : rewardMessage);
     saveState();
     renderCurrentView();
@@ -803,7 +989,8 @@ function renderAdventureReportResult(report) {
                 <div><dt>経験値</dt><dd>${report.experience}</dd></div>
                 <div><dt>熟練度</dt><dd>${report.mastery}</dd></div>
                 <div><dt>ゴールド</dt><dd>${report.gold}G</dd></div>
-                <div><dt>入手アイテム</dt><dd>${report.itemName}</dd></div>
+                <div><dt>入手装備</dt><dd>${report.equipmentDrops.length > 0 ? report.equipmentDrops.map((equipment) => equipment.name).join("、") : "なし"}</dd></div>
+                <div><dt>入手素材</dt><dd>${report.materialDrops.length > 0 ? report.materialDrops.join("、") : "なし"}</dd></div>
                 <div><dt>Lvアップ</dt><dd>${report.levelMessages.length > 0 ? report.levelMessages.join("、") : "なし"}</dd></div>
             </dl>
         </section>
@@ -1233,6 +1420,47 @@ function renderTown() {
                 </article>
             `).join("")}
         </section>
+        ${renderWarehousePanel()}
+    `;
+}
+
+function renderWarehousePanel() {
+    const equipment = gameState.inventory.equipment;
+    const unprotected = equipment.filter((item) => !item.protected);
+    const sellValue = unprotected.reduce((total, item) => total + item.sellValue, 0);
+
+    return `
+        <section class="table-panel warehouse-panel">
+            <div class="card-title-row">
+                <div>
+                    <p class="eyebrow">Warehouse</p>
+                    <h2>倉庫</h2>
+                </div>
+                <span class="tag">${equipment.length}個</span>
+            </div>
+            <div class="warehouse-actions">
+                <p>未保護装備 ${unprotected.length}個 / 売却見込み ${sellValue}G</p>
+                <button class="primary-button" type="button" data-action="sell-unprotected" ${unprotected.length === 0 ? "disabled" : ""}>未保護装備を一括売却</button>
+            </div>
+            <h3 class="subheading">所持装備</h3>
+            <div class="equipment-list">
+                ${equipment.length === 0 ? `<p>装備はまだありません。</p>` : equipment.map((item) => `
+                    <article class="equipment-row">
+                        <div>
+                            <strong>${item.protected ? "★ " : ""}${item.name}</strong>
+                            <p>${equipmentSummary(item)}</p>
+                        </div>
+                        <button class="secondary-button" type="button" data-action="toggle-protect" data-equipment-id="${item.id}">${item.protected ? "保護解除" : "★保護"}</button>
+                    </article>
+                `).join("")}
+            </div>
+            <h3 class="subheading">素材</h3>
+            <div class="material-list">
+                ${gameState.inventory.materials.length === 0 ? `<p>素材はまだありません。</p>` : gameState.inventory.materials.map((material) => `
+                    <span class="tag">${material.name} x${material.quantity}</span>
+                `).join("")}
+            </div>
+        </section>
     `;
 }
 
@@ -1254,6 +1482,14 @@ function renderLogPanel() {
 }
 
 function logBadge(log) {
+    if (log.includes("戦利品")) {
+        return { label: "入手", className: "badge-loot" };
+    }
+
+    if (log.includes("売却")) {
+        return { label: "売却", className: "badge-sell" };
+    }
+
     if (log.includes("出発")) {
         return { label: "出発", className: "badge-depart" };
     }
@@ -1386,6 +1622,14 @@ app.addEventListener("click", (event) => {
         if (jobId) {
             changeJob(actionButton.dataset.characterId, jobId);
         }
+    }
+
+    if (actionButton.dataset.action === "toggle-protect") {
+        toggleEquipmentProtection(actionButton.dataset.equipmentId);
+    }
+
+    if (actionButton.dataset.action === "sell-unprotected") {
+        sellUnprotectedEquipment();
     }
 
     if (actionButton.dataset.action === "next-report-step" && lastAdventureReport) {
