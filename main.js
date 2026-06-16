@@ -1016,22 +1016,31 @@ function renderHomePartyCard(party) {
     const dungeon = adventure ? byId(gameData.dungeons, adventure.dungeonId) : null;
     const status = adventureStatus(adventure);
     const canDepart = !adventure && party.memberIds.length > 0;
+    const leader = byId(gameData.characters, party.leaderId);
 
     return `
         <article class="home-party-card" data-home-party-card="${party.id}">
-            <div class="card-title-row">
-                <div>
+            <div class="home-party-main">
+                <div class="home-party-title">
                     <h3>${party.name}</h3>
-                    <p class="home-party-meta">${namesFromIds(gameData.characters, party.memberIds)}</p>
+                    <span class="tag" data-home-party-status="${party.id}">${status}</span>
                 </div>
-                <span class="tag" data-home-party-status="${party.id}">${status}</span>
-            </div>
-            <div class="mini-meta">
-                <span>${dungeon ? dungeon.name : "街"}</span>
-                <span>${partyPolicy(party)}</span>
-                <span>${party.memberIds.length}名</span>
+                <div class="mini-meta desktop-meta">
+                    <span>${dungeon ? dungeon.name : "街"}</span>
+                    <span>${partyPolicy(party)}</span>
+                    <span>${party.memberIds.length}名</span>
+                </div>
             </div>
             ${adventure ? renderHomeAdventureAction(adventure, dungeon) : renderHomeDepartAction(party, canDepart)}
+            <details class="party-extra-details">
+                <summary>詳細</summary>
+                <dl class="compact-detail-list">
+                    <div><dt>リーダー</dt><dd>${leader?.name ?? "未設定"}</dd></div>
+                    <div><dt>方針</dt><dd>${partyPolicy(party)}</dd></div>
+                    <div><dt>現在地</dt><dd>${dungeon ? dungeon.name : "街"}</dd></div>
+                    <div><dt>メンバー</dt><dd>${namesFromIds(gameData.characters, party.memberIds)}</dd></div>
+                </dl>
+            </details>
         </article>
     `;
 }

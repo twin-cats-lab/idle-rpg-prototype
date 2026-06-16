@@ -184,6 +184,18 @@ p {
     background: var(--panel);
 }
 
+.home-party-main {
+    display: grid;
+    gap: 8px;
+}
+
+.home-party-title {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
 .home-party-meta {
     margin-bottom: 0;
     font-size: 0.9rem;
@@ -202,6 +214,24 @@ p {
     color: var(--muted);
     background: var(--panel-soft);
     font-size: 0.78rem;
+}
+
+.party-extra-details {
+    display: none;
+}
+
+.compact-detail-list {
+    display: grid;
+    gap: 6px;
+    margin: 8px 0 0;
+}
+
+.compact-detail-list div {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 8px;
+    border-top: 1px solid var(--line);
+    padding-top: 6px;
 }
 
 .home-action-area {
@@ -726,6 +756,10 @@ th {
 }
 
 @media (max-width: 720px) {
+    body {
+        font-size: 0.94rem;
+    }
+
     .app-header {
         align-items: start;
         flex-direction: column;
@@ -742,14 +776,60 @@ th {
 
     .home-party-grid {
         grid-template-columns: 1fr;
+        gap: 10px;
     }
 
-    .home-party-card,
+    .home-party-card {
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .home-party-card h3 {
+        margin-bottom: 0;
+        font-size: 1rem;
+    }
+
+    .desktop-meta {
+        display: none;
+    }
+
+    .party-extra-details {
+        display: block;
+    }
+
+    .party-extra-details summary {
+        min-height: 34px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 10px;
+        color: var(--muted);
+        background: var(--panel-soft);
+        font-size: 0.86rem;
+    }
+
+    .compact-detail-list {
+        font-size: 0.86rem;
+    }
+
     .hero-panel,
     .wide-card,
     .card,
     .table-panel {
         padding: 16px;
+    }
+
+    .home-action-area {
+        gap: 8px;
+        padding-top: 8px;
+    }
+
+    .home-action-area label {
+        font-size: 0.84rem;
+    }
+
+    .home-action-area p {
+        margin-bottom: 0;
+        font-size: 0.84rem;
     }
 
     .touch-button {
@@ -758,7 +838,8 @@ th {
     }
 
     .big-timer {
-        font-size: 2.15rem;
+        font-size: 1.95rem;
+        line-height: 1.1;
     }
 
     .report-actions {
