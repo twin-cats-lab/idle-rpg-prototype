@@ -268,7 +268,7 @@ p {
 
 .adventure-report-panel {
     display: grid;
-    grid-template-rows: auto minmax(150px, 220px) auto auto;
+    grid-template-rows: auto 170px auto auto auto;
     gap: 12px;
     border: 1px solid rgba(132, 201, 155, 0.45);
     border-radius: 8px;
@@ -278,8 +278,8 @@ p {
 }
 
 .room-log-scroll {
-    min-height: 150px;
-    max-height: 220px;
+    min-height: 170px;
+    max-height: 170px;
     overflow-y: auto;
     border: 1px solid var(--line);
     border-radius: 8px;
@@ -287,32 +287,38 @@ p {
     background: rgba(0, 0, 0, 0.12);
 }
 
-.room-log-list {
+.single-log-event {
     display: grid;
-    gap: 10px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+    gap: 12px;
+    align-content: start;
+    min-height: 100%;
 }
 
-.room-log-list li,
+.single-log-event p {
+    margin: 0;
+    font-size: 1.02rem;
+    line-height: 1.7;
+}
+
 .log-list li {
     display: flex;
     align-items: flex-start;
     gap: 10px;
 }
 
-.room-log-list p {
-    margin: 0;
-}
-
 .report-actions {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     gap: 10px;
-    position: sticky;
-    bottom: 0;
     background: var(--panel);
+    align-items: center;
+}
+
+.report-counter {
+    min-width: 58px;
+    color: var(--muted);
+    text-align: center;
+    font-weight: 700;
 }
 
 .result-summary {
@@ -842,15 +848,10 @@ th {
         line-height: 1.1;
     }
 
-    .report-actions {
-        grid-template-columns: 1fr;
-    }
-
     .confirm-actions {
         grid-template-columns: 1fr;
     }
 
-    .room-log-list li,
     .log-list li {
         gap: 8px;
     }

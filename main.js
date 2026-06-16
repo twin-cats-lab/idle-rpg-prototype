@@ -1083,7 +1083,7 @@ function renderAdventureReport(partyId) {
         return "";
     }
 
-    const visibleSteps = report.steps.slice(0, report.currentStep + 1);
+    const currentStep = report.steps[report.currentStep] ?? report.steps[0];
     const isComplete = report.currentStep >= report.steps.length - 1;
 
     return `
@@ -1096,21 +1096,18 @@ function renderAdventureReport(partyId) {
                 <span class="log-badge badge-return">帰還</span>
             </div>
             <div class="room-log-scroll">
-                <ol class="room-log-list">
-                    ${visibleSteps.map((step) => `
-                        <li>
-                            <span class="log-badge">${step.badge}</span>
-                            <p>${step.text}</p>
-                        </li>
-                    `).join("")}
-                </ol>
+                <article class="single-log-event">
+                    <span class="log-badge">${currentStep.badge}</span>
+                    <p>${currentStep.text}</p>
+                </article>
             </div>
-            ${isComplete ? renderAdventureReportResult(report) : `
-                <div class="report-actions">
-                    <button class="secondary-button touch-button" type="button" data-action="next-report-step" data-party-id="${partyId}">次へ</button>
-                    <button class="primary-button touch-button" type="button" data-action="show-report-result" data-party-id="${partyId}">結果を見る</button>
-                </div>
-            `}
+            <div class="report-actions">
+                <button class="secondary-button touch-button" type="button" data-action="prev-report-step" data-party-id="${partyId}" ${report.currentStep === 0 ? "disabled" : ""}>前へ</button>
+                <span class="report-counter">${report.currentStep + 1}/${report.steps.length}</span>
+                <button class="secondary-button touch-button" type="button" data-action="next-report-step" data-party-id="${partyId}" ${isComplete ? "disabled" : ""}>次へ</button>
+            </div>
+            <button class="primary-button touch-button" type="button" data-action="show-report-result" data-party-id="${partyId}">結果を見る</button>
+            ${isComplete ? renderAdventureReportResult(report) : ""}
         </section>
     `;
 }
@@ -1120,11 +1117,11 @@ function renderAdventureReportResult(report) {
         <section class="result-summary">
             <h3>冒険結果</h3>
             <dl class="detail-list two-column">
-                <div><dt>経験値</dt><dd>${report.experience}</dd></div>
+                <div><dt>獲得経験値</dt><dd>${report.experience}</dd></div>
                 <div><dt>熟練度</dt><dd>${report.mastery}</dd></div>
-                <div><dt>ゴールド</dt><dd>${report.gold}G</dd></div>
-                <div><dt>入手装備</dt><dd>${report.equipmentDrops.length > 0 ? report.equipmentDrops.map((equipment) => equipment.name).join("、") : "なし"}</dd></div>
-                <div><dt>入手素材</dt><dd>${report.materialDrops.length > 0 ? report.materialDrops.join("、") : "なし"}</dd></div>
+                <div><dt>獲得ゴールド</dt><dd>${report.gold}G</dd></div>
+                <div><dt>獲得装備</dt><dd>${report.equipmentDrops.length > 0 ? report.equipmentDrops.map((equipment) => equipment.name).join("、") : "なし"}</dd></div>
+                <div><dt>獲得素材</dt><dd>${report.materialDrops.length > 0 ? report.materialDrops.join("、") : "なし"}</dd></div>
                 <div><dt>Lvアップ</dt><dd>${report.levelMessages.length > 0 ? report.levelMessages.join("、") : "なし"}</dd></div>
             </dl>
         </section>
@@ -1842,6 +1839,15 @@ app.addEventListener("click", (event) => {
             return;
         }
         report.currentStep = Math.min(report.currentStep + 1, report.steps.length - 1);
+        renderCurrentView();
+    }
+
+    if (actionButton.dataset.action === "prev-report-step") {
+        const report = adventureReportsByParty[actionButton.dataset.partyId];
+        if (!report) {
+            return;
+        }
+        report.currentStep = Math.max(report.currentStep - 1, 0);
         renderCurrentView();
     }
 
