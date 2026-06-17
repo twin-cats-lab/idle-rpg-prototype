@@ -117,6 +117,7 @@ let selectedPartyId = "party-01";
 let homeDungeonSelections = {};
 let lastAdventureReport = null;
 let adventureReportsByParty = {};
+let activeAdventureReportPartyId = null;
 let sellConfirmOpen = false;
 let isCharacterDetailPanelOpen = false;
 let gameState = createInitialState();
@@ -762,6 +763,7 @@ function createAdventureReport(party, dungeon, levelMessages, battleResult) {
         materialDrops: battleResult.materialDrops,
         levelMessages,
         currentStep: 0,
+        showResult: false,
         steps: [
             { badge: "出発", text: `${party.name}は${dungeon.name}へ向けて街を出た。` },
             { badge: "到着", text: `${leader?.name ?? "リーダー"}が入口の様子を見て、進む順番を決めた。` },
@@ -847,6 +849,7 @@ function claimReward(adventureId) {
     const rewardMessage = `${partyLogName(party)}が${dungeon.name}から帰還。経験値${dungeon.reward.experience}、熟練度${dungeon.reward.mastery}、${dungeon.reward.gold}Gを獲得しました。`;
     lastAdventureReport = createAdventureReport(party, dungeon, levelMessages, battleResult);
     adventureReportsByParty[party.id] = lastAdventureReport;
+    activeAdventureReportPartyId = party.id;
     const growthMessages = [
         levelMessages.length > 0 ? `レベルアップ: ${levelMessages.join("、")}` : "",
         skillMessages.length > 0 ? `スキル習得: ${skillMessages.join("、")}` : ""
@@ -1003,7 +1006,6 @@ function renderHomePartyStatus() {
                 ${gameData.parties.map((party) => `
                     <div class="home-party-stack">
                         ${renderHomePartyCard(party)}
-                        ${renderAdventureReport(party.id)}
                     </div>
                 `).join("")}
             </div>
@@ -1076,8 +1078,8 @@ function renderHomeDepartAction(party, canDepart) {
     `;
 }
 
-function renderAdventureReport(partyId) {
-    const report = adventureReportsByParty[partyId];
+function renderAdventureReportSheet() {
+    const report = activeAdventureReportPartyId ? adventureReportsByParty[activeAdventureReportPartyId] : null;
 
     if (!report) {
         return "";
@@ -1085,30 +1087,38 @@ function renderAdventureReport(partyId) {
 
     const currentStep = report.steps[report.currentStep] ?? report.steps[0];
     const isComplete = report.currentStep >= report.steps.length - 1;
+    const partyId = activeAdventureReportPartyId;
 
     return `
-        <section class="adventure-report-panel">
-            <div class="card-title-row">
-                <div>
-                    <p class="eyebrow">Return Report</p>
-                    <h2>${report.leaderName}率いるパーティの帰還報告</h2>
+        <div class="adventure-report-overlay" role="dialog" aria-modal="true" aria-label="冒険ログ">
+            <button class="report-backdrop" type="button" data-action="close-report-sheet" aria-label="冒険ログを閉じる"></button>
+            <section class="adventure-report-panel">
+                <div class="report-sheet-header">
+                    <div>
+                        <p class="eyebrow">Return Report</p>
+                        <h2>${report.partyName}</h2>
+                        <p>${report.dungeonName}</p>
+                    </div>
+                    <button class="secondary-button icon-like-button" type="button" data-action="close-report-sheet">閉じる</button>
                 </div>
-                <span class="log-badge badge-return">帰還</span>
-            </div>
-            <div class="room-log-scroll">
-                <article class="single-log-event">
-                    <span class="log-badge">${currentStep.badge}</span>
-                    <p>${currentStep.text}</p>
-                </article>
-            </div>
-            <div class="report-actions">
-                <button class="secondary-button touch-button" type="button" data-action="prev-report-step" data-party-id="${partyId}" ${report.currentStep === 0 ? "disabled" : ""}>前へ</button>
-                <span class="report-counter">${report.currentStep + 1}/${report.steps.length}</span>
-                <button class="secondary-button touch-button" type="button" data-action="next-report-step" data-party-id="${partyId}" ${isComplete ? "disabled" : ""}>次へ</button>
-            </div>
-            <button class="primary-button touch-button" type="button" data-action="show-report-result" data-party-id="${partyId}">結果を見る</button>
-            ${isComplete ? renderAdventureReportResult(report) : ""}
-        </section>
+                <div class="room-log-scroll">
+                    ${report.showResult ? renderAdventureReportResult(report) : `
+                        <article class="single-log-event">
+                            <span class="log-badge">${currentStep.badge}</span>
+                            <p>${currentStep.text}</p>
+                        </article>
+                    `}
+                </div>
+                <div class="report-footer">
+                    <span class="report-counter">${report.currentStep + 1}/${report.steps.length}</span>
+                    <div class="report-actions">
+                        <button class="secondary-button touch-button" type="button" data-action="prev-report-step" data-party-id="${partyId}" ${report.currentStep === 0 ? "disabled" : ""}>前へ</button>
+                        <button class="secondary-button touch-button" type="button" data-action="next-report-step" data-party-id="${partyId}" ${isComplete ? "disabled" : ""}>次へ</button>
+                        <button class="primary-button touch-button" type="button" data-action="show-report-result" data-party-id="${partyId}">結果を見る</button>
+                    </div>
+                </div>
+            </section>
+        </div>
     `;
 }
 
@@ -1720,6 +1730,7 @@ function switchView(viewName) {
 
 function renderCurrentView() {
     renderers[currentView]();
+    app.innerHTML += renderAdventureReportSheet();
 }
 
 function isMobileView() {
@@ -1838,6 +1849,7 @@ app.addEventListener("click", (event) => {
         if (!report) {
             return;
         }
+        report.showResult = false;
         report.currentStep = Math.min(report.currentStep + 1, report.steps.length - 1);
         renderCurrentView();
     }
@@ -1847,6 +1859,7 @@ app.addEventListener("click", (event) => {
         if (!report) {
             return;
         }
+        report.showResult = false;
         report.currentStep = Math.max(report.currentStep - 1, 0);
         renderCurrentView();
     }
@@ -1856,7 +1869,13 @@ app.addEventListener("click", (event) => {
         if (!report) {
             return;
         }
+        report.showResult = true;
         report.currentStep = report.steps.length - 1;
+        renderCurrentView();
+    }
+
+    if (actionButton.dataset.action === "close-report-sheet") {
+        activeAdventureReportPartyId = null;
         renderCurrentView();
     }
 });

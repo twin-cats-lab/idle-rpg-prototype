@@ -266,24 +266,63 @@ p {
     margin-top: 10px;
 }
 
-.adventure-report-panel {
+.adventure-report-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
     display: grid;
-    grid-template-rows: auto 170px auto auto auto;
-    gap: 12px;
+    align-items: center;
+    justify-items: center;
+    padding: 20px;
+}
+
+.report-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: rgba(4, 8, 14, 0.68);
+    cursor: pointer;
+}
+
+.adventure-report-panel {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: auto minmax(220px, 1fr) auto;
+    width: min(720px, 100%);
+    max-height: min(760px, 86vh);
+    gap: 14px;
     border: 1px solid rgba(132, 201, 155, 0.45);
-    border-radius: 8px;
-    margin-top: 16px;
+    border-radius: 12px;
     padding: 18px;
-    background: rgba(132, 201, 155, 0.08);
+    background: var(--panel);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+}
+
+.report-sheet-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.report-sheet-header h2,
+.report-sheet-header p {
+    margin-bottom: 0;
+}
+
+.icon-like-button {
+    min-height: 40px;
+    padding: 8px 12px;
+    white-space: nowrap;
 }
 
 .room-log-scroll {
-    min-height: 170px;
-    max-height: 170px;
+    min-height: 220px;
     overflow-y: auto;
     border: 1px solid var(--line);
     border-radius: 8px;
-    padding: 10px;
+    padding: 14px;
     background: rgba(0, 0, 0, 0.12);
 }
 
@@ -296,8 +335,8 @@ p {
 
 .single-log-event p {
     margin: 0;
-    font-size: 1.02rem;
-    line-height: 1.7;
+    font-size: 1.04rem;
+    line-height: 1.75;
 }
 
 .log-list li {
@@ -308,22 +347,25 @@ p {
 
 .report-actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
-    background: var(--panel);
     align-items: center;
 }
 
+.report-footer {
+    display: grid;
+    gap: 10px;
+}
+
 .report-counter {
-    min-width: 58px;
     color: var(--muted);
     text-align: center;
     font-weight: 700;
 }
 
 .result-summary {
-    border-top: 1px solid var(--line);
-    padding-top: 14px;
+    display: grid;
+    gap: 12px;
 }
 
 .section-heading {
@@ -858,6 +900,37 @@ th {
 
     .log-badge {
         min-width: 44px;
+    }
+
+    .adventure-report-overlay {
+        align-items: end;
+        padding: 0;
+    }
+
+    .adventure-report-panel {
+        width: 100%;
+        max-height: 86vh;
+        border-right: 0;
+        border-bottom: 0;
+        border-left: 0;
+        border-radius: 18px 18px 0 0;
+        padding: 16px;
+    }
+
+    .report-sheet-header {
+        gap: 10px;
+    }
+
+    .room-log-scroll {
+        min-height: 210px;
+    }
+
+    .report-actions {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .report-actions .touch-button {
+        min-height: 54px;
     }
 
     .warehouse-actions,
