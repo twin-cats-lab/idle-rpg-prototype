@@ -583,7 +583,14 @@ function createBattleResult(party, dungeon) {
         const roomName = `${index + 1}部屋目`;
         const requiredScore = Math.round(monster.score * (0.85 + Math.random() * 0.35));
         const victory = power >= requiredScore;
-        steps.push({ badge: roomName, text: `${roomName}: ${monster.name}と遭遇。${victory ? "勝利" : "苦戦しながら撤退判断"}` });
+        const damage = Math.max(1, Math.round(power * 0.18 + Math.random() * 8 - monster.defense * 0.4));
+        steps.push(logEvent(roomName, [
+            logText(`${roomName}: `),
+            logMark("monster", monster.name),
+            logText("と遭遇。"),
+            victory ? logMark("damage", `${damage}ダメージ`) : logMark("damage", `${monster.attack}被害`),
+            logText(victory ? "を与えて勝利。" : "を受け、撤退を判断。")
+        ]));
 
         if (!victory) {
             return;
@@ -599,14 +606,20 @@ function createBattleResult(party, dungeon) {
             const equipment = createEquipmentDrop(randomFrom(monster.equipmentDrops));
             if (equipment) {
                 equipmentDrops.push(equipment);
-                steps.push({ badge: "装備", text: `${equipment.name}を入手。` });
+                steps.push(logEvent("装備", [
+                    logMark("item", equipment.name),
+                    logText("を入手。")
+                ]));
             }
         }
 
         if (Math.random() < 0.8 + dropBonus) {
             const materialName = randomFrom(monster.materialDrops);
             materialDrops.push(materialName);
-            steps.push({ badge: "素材", text: `${materialName}を入手。` });
+            steps.push(logEvent("素材", [
+                logMark("item", materialName),
+                logText("を入手。")
+            ]));
         }
     });
 
@@ -744,11 +757,66 @@ function adventureItemName(dungeonId) {
     return dungeonId === "ruins" ? "水路の古銭" : "森露の小瓶";
 }
 
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function logText(text) {
+    return { type: "text", text };
+}
+
+function logMark(type, text) {
+    return { type, text };
+}
+
+function logEvent(badge, parts) {
+    const normalizedParts = parts.map((part) => typeof part === "string" ? logText(part) : part);
+    return {
+        badge,
+        parts: normalizedParts,
+        text: normalizedParts.map((part) => part.text).join("")
+    };
+}
+
+function renderLogPart(part) {
+    if (!part || part.text === undefined || part.text === null) {
+        return "";
+    }
+
+    if (part.type === "text") {
+        return escapeHtml(part.text);
+    }
+
+    return `<span class="log-token log-token-${part.type}">【${escapeHtml(part.text)}】</span>`;
+}
+
+function renderLogEvent(event) {
+    const parts = event.parts ?? [logText(event.text ?? "")];
+
+    return `
+        <article class="single-log-event">
+            <span class="log-badge">${escapeHtml(event.badge)}</span>
+            <p>${parts.map(renderLogPart).join("")}</p>
+        </article>
+    `;
+}
+
+function characterBattleSkill(character) {
+    const skillId = character?.equippedSkills?.active?.find(Boolean);
+    return skillId ? byId(gameData.skills, skillId) : null;
+}
+
 function createAdventureReport(party, dungeon, levelMessages, battleResult) {
     const leader = byId(gameData.characters, party.leaderId) ?? byId(gameData.characters, party.memberIds[0]);
     const members = party.memberIds.map((id) => byId(gameData.characters, id)).filter(Boolean);
     const roomActors = [leader, ...members.filter((member) => member.id !== leader?.id)];
     const itemName = adventureItemName(dungeon.id);
+    const actorForStep = (index) => roomActors[index % Math.max(roomActors.length, 1)];
 
     return {
         partyName: party.name,
@@ -765,13 +833,39 @@ function createAdventureReport(party, dungeon, levelMessages, battleResult) {
         currentStep: 0,
         showResult: false,
         steps: [
-            { badge: "出発", text: `${party.name}は${dungeon.name}へ向けて街を出た。` },
-            { badge: "到着", text: `${leader?.name ?? "リーダー"}が入口の様子を見て、進む順番を決めた。` },
-            ...battleResult.steps.map((step, index) => ({
-                badge: step.badge,
-                text: `${step.text} ${roomActors[index % Math.max(roomActors.length, 1)]?.name ?? "仲間"}は${personalityComment(roomActors[index % Math.max(roomActors.length, 1)])}。`
-            })),
-            { badge: battleResult.outcome === "撤退" ? "撤退" : "帰還", text: `${party.name}は${battleResult.outcome}。報酬を整理しよう。` }
+            logEvent("出発", [
+                logMark("party", party.name),
+                logText("は"),
+                logMark("place", dungeon.name),
+                logText("へ向けて街を出た。")
+            ]),
+            logEvent("到着", [
+                logMark("character", leader?.name ?? "リーダー"),
+                logText("が入口の様子を見て、進む順番を決めた。")
+            ]),
+            ...battleResult.steps.map((step, index) => {
+                const actor = actorForStep(index);
+                const skill = characterBattleSkill(actor);
+                const actorParts = [
+                    logText(" "),
+                    logMark("character", actor?.name ?? "仲間"),
+                    skill ? logText("は") : logText("は"),
+                    ...(skill ? [logMark("skill", skill.name), logText("を構え、")] : []),
+                    logText(`${personalityComment(actor)}。`)
+                ];
+
+                return logEvent(step.badge, [...(step.parts ?? [logText(step.text)]), ...actorParts]);
+            }),
+            logEvent(battleResult.outcome === "撤退" ? "撤退" : "帰還", [
+                logMark("party", party.name),
+                logText("は"),
+                battleResult.outcome === "撤退" ? logMark("damage", battleResult.outcome) : logMark("exp", battleResult.outcome),
+                logText("。報酬を整理しよう。"),
+                logText(" EXP +"),
+                logMark("exp", dungeon.reward.experience),
+                logText(" / G +"),
+                logMark("gold", dungeon.reward.gold)
+            ])
         ]
     };
 }
@@ -1102,12 +1196,7 @@ function renderAdventureReportSheet() {
                     <button class="secondary-button icon-like-button" type="button" data-action="close-report-sheet">閉じる</button>
                 </div>
                 <div class="room-log-scroll">
-                    ${report.showResult ? renderAdventureReportResult(report) : `
-                        <article class="single-log-event">
-                            <span class="log-badge">${currentStep.badge}</span>
-                            <p>${currentStep.text}</p>
-                        </article>
-                    `}
+                    ${report.showResult ? renderAdventureReportResult(report) : renderLogEvent(currentStep)}
                 </div>
                 <div class="report-footer">
                     <span class="report-counter">${report.currentStep + 1}/${report.steps.length}</span>
@@ -1123,16 +1212,20 @@ function renderAdventureReportSheet() {
 }
 
 function renderAdventureReportResult(report) {
+    const equipmentText = report.equipmentDrops.length > 0 ? report.equipmentDrops.map((equipment) => renderLogPart(logMark("item", equipment.name))).join("、") : "なし";
+    const materialText = report.materialDrops.length > 0 ? report.materialDrops.map((material) => renderLogPart(logMark("item", material))).join("、") : "なし";
+    const levelText = report.levelMessages.length > 0 ? report.levelMessages.map((message) => renderLogPart(logMark("level", message))).join("、") : "なし";
+
     return `
         <section class="result-summary">
             <h3>冒険結果</h3>
             <dl class="detail-list two-column">
-                <div><dt>獲得経験値</dt><dd>${report.experience}</dd></div>
+                <div><dt>獲得経験値</dt><dd>${renderLogPart(logMark("exp", `EXP +${report.experience}`))}</dd></div>
                 <div><dt>熟練度</dt><dd>${report.mastery}</dd></div>
-                <div><dt>獲得ゴールド</dt><dd>${report.gold}G</dd></div>
-                <div><dt>獲得装備</dt><dd>${report.equipmentDrops.length > 0 ? report.equipmentDrops.map((equipment) => equipment.name).join("、") : "なし"}</dd></div>
-                <div><dt>獲得素材</dt><dd>${report.materialDrops.length > 0 ? report.materialDrops.join("、") : "なし"}</dd></div>
-                <div><dt>Lvアップ</dt><dd>${report.levelMessages.length > 0 ? report.levelMessages.join("、") : "なし"}</dd></div>
+                <div><dt>獲得ゴールド</dt><dd>${renderLogPart(logMark("gold", `G +${report.gold}`))}</dd></div>
+                <div><dt>獲得装備</dt><dd>${equipmentText}</dd></div>
+                <div><dt>獲得素材</dt><dd>${materialText}</dd></div>
+                <div><dt>Lvアップ</dt><dd>${levelText}</dd></div>
             </dl>
         </section>
     `;

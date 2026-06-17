@@ -339,6 +339,44 @@ p {
     line-height: 1.75;
 }
 
+.log-token {
+    display: inline-block;
+    margin: 0 1px;
+    font-weight: 800;
+}
+
+.log-token-character,
+.log-token-party,
+.log-token-place {
+    color: #78d6ff;
+}
+
+.log-token-monster {
+    color: #d88968;
+}
+
+.log-token-item {
+    color: #f0c35b;
+}
+
+.log-token-skill {
+    color: #c49cff;
+}
+
+.log-token-gold {
+    color: #ffe06b;
+}
+
+.log-token-exp,
+.log-token-level,
+.log-token-heal {
+    color: #8ee89d;
+}
+
+.log-token-damage {
+    color: #ff9a52;
+}
+
 .log-list li {
     display: flex;
     align-items: flex-start;
