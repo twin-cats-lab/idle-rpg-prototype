@@ -584,8 +584,20 @@ function createBattleResult(party, dungeon) {
         const requiredScore = Math.round(monster.score * (0.85 + Math.random() * 0.35));
         const victory = power >= requiredScore;
         const damage = Math.max(1, Math.round(power * 0.18 + Math.random() * 8 - monster.defense * 0.4));
-        steps.push(logEvent(roomName, [
-            logText(`${roomName}: `),
+        steps.push(logEvent("room", roomName, {
+            room: index + 1,
+            target: monster.name
+        }, [
+            logText(`${roomName}に入った。`),
+            logMark("monster", monster.name),
+            logText("の気配がある。")
+        ]));
+        steps.push(logEvent(victory ? "battle" : "retreat", `${monster.name}との戦闘`, {
+            room: index + 1,
+            target: monster.name,
+            damage: victory ? damage : 0,
+            outcome: victory ? "victory" : "retreat"
+        }, [
             logMark("monster", monster.name),
             logText("と遭遇。"),
             victory ? logMark("damage", `${damage}ダメージ`) : logMark("damage", `${monster.attack}被害`),
@@ -606,7 +618,11 @@ function createBattleResult(party, dungeon) {
             const equipment = createEquipmentDrop(randomFrom(monster.equipmentDrops));
             if (equipment) {
                 equipmentDrops.push(equipment);
-                steps.push(logEvent("装備", [
+                steps.push(logEvent("drop", "装備を入手", {
+                    room: index + 1,
+                    item: equipment.name,
+                    itemType: "equipment"
+                }, [
                     logMark("item", equipment.name),
                     logText("を入手。")
                 ]));
@@ -616,7 +632,11 @@ function createBattleResult(party, dungeon) {
         if (Math.random() < 0.8 + dropBonus) {
             const materialName = randomFrom(monster.materialDrops);
             materialDrops.push(materialName);
-            steps.push(logEvent("素材", [
+            steps.push(logEvent("drop", "素材を入手", {
+                room: index + 1,
+                item: materialName,
+                itemType: "material"
+            }, [
                 logMark("item", materialName),
                 logText("を入手。")
             ]));
@@ -774,10 +794,25 @@ function logMark(type, text) {
     return { type, text };
 }
 
-function logEvent(badge, parts) {
+const logTypeLabels = {
+    depart: "出発",
+    arrive: "到着",
+    room: "部屋",
+    battle: "戦闘",
+    drop: "入手",
+    reward: "報酬",
+    levelUp: "LvUP",
+    retreat: "撤退",
+    return: "帰還",
+    fallback: "ログ"
+};
+
+function logEvent(type, title, data = {}, parts = []) {
     const normalizedParts = parts.map((part) => typeof part === "string" ? logText(part) : part);
     return {
-        badge,
+        type,
+        title,
+        ...data,
         parts: normalizedParts,
         text: normalizedParts.map((part) => part.text).join("")
     };
@@ -795,13 +830,42 @@ function renderLogPart(part) {
     return `<span class="log-token log-token-${part.type}">【${escapeHtml(part.text)}】</span>`;
 }
 
+function normalizeLogEvent(event) {
+    if (typeof event === "string") {
+        return {
+            type: "fallback",
+            title: "ログ",
+            parts: [logText(event)],
+            text: event
+        };
+    }
+
+    if (!event || typeof event !== "object") {
+        return {
+            type: "fallback",
+            title: "ログ",
+            parts: [logText("")],
+            text: ""
+        };
+    }
+
+    const type = event.type ?? "fallback";
+    return {
+        ...event,
+        type,
+        title: event.title ?? event.badge ?? logTypeLabels[type] ?? "ログ",
+        parts: event.parts ?? [logText(event.text ?? "")]
+    };
+}
+
 function renderLogEvent(event) {
-    const parts = event.parts ?? [logText(event.text ?? "")];
+    const normalizedEvent = normalizeLogEvent(event);
 
     return `
         <article class="single-log-event">
-            <span class="log-badge">${escapeHtml(event.badge)}</span>
-            <p>${parts.map(renderLogPart).join("")}</p>
+            <span class="log-badge log-badge-${escapeHtml(normalizedEvent.type)}">${escapeHtml(logTypeLabels[normalizedEvent.type] ?? normalizedEvent.type)}</span>
+            <h3 class="log-event-title">${escapeHtml(normalizedEvent.title)}</h3>
+            <p>${normalizedEvent.parts.map(renderLogPart).join("")}</p>
         </article>
     `;
 }
@@ -830,16 +894,23 @@ function createAdventureReport(party, dungeon, levelMessages, battleResult) {
         equipmentDrops: battleResult.equipmentDrops,
         materialDrops: battleResult.materialDrops,
         levelMessages,
+        retreated: battleResult.outcome === "撤退",
         currentStep: 0,
         showResult: false,
         steps: [
-            logEvent("出発", [
+            logEvent("depart", "出発", {
+                party: party.name,
+                dungeon: dungeon.name
+            }, [
                 logMark("party", party.name),
                 logText("は"),
                 logMark("place", dungeon.name),
                 logText("へ向けて街を出た。")
             ]),
-            logEvent("到着", [
+            logEvent("arrive", "ダンジョン到着", {
+                actor: leader?.name ?? "リーダー",
+                dungeon: dungeon.name
+            }, [
                 logMark("character", leader?.name ?? "リーダー"),
                 logText("が入口の様子を見て、進む順番を決めた。")
             ]),
@@ -849,22 +920,46 @@ function createAdventureReport(party, dungeon, levelMessages, battleResult) {
                 const actorParts = [
                     logText(" "),
                     logMark("character", actor?.name ?? "仲間"),
-                    skill ? logText("は") : logText("は"),
+                    logText("は"),
                     ...(skill ? [logMark("skill", skill.name), logText("を構え、")] : []),
                     logText(`${personalityComment(actor)}。`)
                 ];
 
-                return logEvent(step.badge, [...(step.parts ?? [logText(step.text)]), ...actorParts]);
+                return {
+                    ...normalizeLogEvent(step),
+                    actor: actor?.name ?? "仲間",
+                    skill: skill?.name ?? "",
+                    parts: [...(step.parts ?? [logText(step.text)]), ...actorParts],
+                    text: [...(step.parts ?? [logText(step.text)]), ...actorParts].map((part) => part.text).join("")
+                };
             }),
-            logEvent(battleResult.outcome === "撤退" ? "撤退" : "帰還", [
+            ...levelMessages.map((message) => logEvent("levelUp", "Lvアップ", {
+                levelUp: message
+            }, [
+                logMark("level", message),
+                logText("に成長した。")
+            ])),
+            logEvent("reward", "報酬整理", {
+                experience: dungeon.reward.experience,
+                gold: dungeon.reward.gold,
+                equipment: battleResult.equipmentDrops.map((equipment) => equipment.name),
+                materials: battleResult.materialDrops
+            }, [
+                logText("EXP +"),
+                logMark("exp", dungeon.reward.experience),
+                logText(" / G +"),
+                logMark("gold", dungeon.reward.gold),
+                logText("を獲得。")
+            ]),
+            logEvent(battleResult.outcome === "撤退" ? "retreat" : "return", battleResult.outcome === "撤退" ? "撤退" : "帰還", {
+                party: party.name,
+                outcome: battleResult.outcome,
+                retreated: battleResult.outcome === "撤退"
+            }, [
                 logMark("party", party.name),
                 logText("は"),
                 battleResult.outcome === "撤退" ? logMark("damage", battleResult.outcome) : logMark("exp", battleResult.outcome),
-                logText("。報酬を整理しよう。"),
-                logText(" EXP +"),
-                logMark("exp", dungeon.reward.experience),
-                logText(" / G +"),
-                logMark("gold", dungeon.reward.gold)
+                logText("。街で報告しよう。")
             ])
         ]
     };
@@ -1212,9 +1307,13 @@ function renderAdventureReportSheet() {
 }
 
 function renderAdventureReportResult(report) {
-    const equipmentText = report.equipmentDrops.length > 0 ? report.equipmentDrops.map((equipment) => renderLogPart(logMark("item", equipment.name))).join("、") : "なし";
-    const materialText = report.materialDrops.length > 0 ? report.materialDrops.map((material) => renderLogPart(logMark("item", material))).join("、") : "なし";
-    const levelText = report.levelMessages.length > 0 ? report.levelMessages.map((message) => renderLogPart(logMark("level", message))).join("、") : "なし";
+    const equipmentDrops = report.equipmentDrops ?? [];
+    const materialDrops = report.materialDrops ?? [];
+    const levelMessages = report.levelMessages ?? [];
+    const equipmentText = equipmentDrops.length > 0 ? equipmentDrops.map((equipment) => renderLogPart(logMark("item", equipment.name))).join("、") : "なし";
+    const materialText = materialDrops.length > 0 ? materialDrops.map((material) => renderLogPart(logMark("item", material))).join("、") : "なし";
+    const levelText = levelMessages.length > 0 ? levelMessages.map((message) => renderLogPart(logMark("level", message))).join("、") : "なし";
+    const retreated = report.retreated ?? report.battleResult?.outcome === "撤退";
 
     return `
         <section class="result-summary">
@@ -1226,6 +1325,7 @@ function renderAdventureReportResult(report) {
                 <div><dt>獲得装備</dt><dd>${equipmentText}</dd></div>
                 <div><dt>獲得素材</dt><dd>${materialText}</dd></div>
                 <div><dt>Lvアップ</dt><dd>${levelText}</dd></div>
+                <div><dt>撤退</dt><dd>${retreated ? renderLogPart(logMark("damage", "あり")) : "なし"}</dd></div>
             </dl>
         </section>
     `;

@@ -339,6 +339,11 @@ p {
     line-height: 1.75;
 }
 
+.log-event-title {
+    margin-bottom: 0;
+    font-size: 1.15rem;
+}
+
 .log-token {
     display: inline-block;
     margin: 0 1px;
@@ -375,6 +380,35 @@ p {
 
 .log-token-damage {
     color: #ff9a52;
+}
+
+.log-badge-depart,
+.log-badge-arrive,
+.log-badge-return {
+    color: #d9f4ff;
+    background: rgba(120, 214, 255, 0.16);
+}
+
+.log-badge-room {
+    color: #f5e8c8;
+    background: rgba(240, 195, 91, 0.14);
+}
+
+.log-badge-battle,
+.log-badge-retreat {
+    color: #ffd2c0;
+    background: rgba(216, 137, 104, 0.18);
+}
+
+.log-badge-drop,
+.log-badge-reward {
+    color: #ffe8a6;
+    background: rgba(240, 195, 91, 0.18);
+}
+
+.log-badge-levelUp {
+    color: #c8f7ce;
+    background: rgba(142, 232, 157, 0.16);
 }
 
 .log-list li {
