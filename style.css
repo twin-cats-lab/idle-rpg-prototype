@@ -493,6 +493,34 @@ p {
     top: 12px;
 }
 
+.character-tabs {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin: 14px 0;
+}
+
+.tab-button {
+    min-height: 42px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--muted);
+    background: var(--panel-soft);
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.tab-button.active {
+    border-color: rgba(132, 201, 155, 0.7);
+    color: var(--text);
+    background: rgba(132, 201, 155, 0.16);
+}
+
+.character-tab-body {
+    display: grid;
+    gap: 14px;
+}
+
 .title-actions {
     display: flex;
     align-items: center;
@@ -715,6 +743,69 @@ select:disabled {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
     margin-top: 12px;
+}
+
+.equipment-compare-card {
+    display: grid;
+    gap: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.equipment-comparison {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.equipment-comparison h4 {
+    margin-bottom: 8px;
+}
+
+.stat-diff-list {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+    gap: 8px;
+}
+
+.stat-diff-list div {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 8px;
+    background: var(--panel);
+}
+
+.stat-diff-list dt {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+
+.stat-diff-list dd {
+    margin: 0;
+    font-weight: 800;
+}
+
+.diff-plus {
+    color: #8ee89d;
+}
+
+.diff-minus {
+    color: #ff9a52;
+}
+
+.diff-even {
+    color: var(--muted);
+}
+
+.job-guide-card {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
 }
 
 .log-panel {
@@ -1007,6 +1098,19 @@ th {
 
     .warehouse-actions,
     .equipment-row {
+        grid-template-columns: 1fr;
+    }
+
+    .character-tabs {
+        gap: 6px;
+    }
+
+    .tab-button {
+        min-height: 40px;
+        font-size: 0.86rem;
+    }
+
+    .equipment-comparison {
         grid-template-columns: 1fr;
     }
 

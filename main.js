@@ -1,5 +1,6 @@
 const STORAGE_KEY = "twinCatsIdleRpg.stage2";
 const ROOKIE_JOB_ID = "rookie";
+const BASIC_ACTION_SKILL_IDS = ["attack"];
 
 const gameData = {
     jobs: [
@@ -12,7 +13,7 @@ const gameData = {
         { id: "hunter", name: "狩人", tier: "基本職", bonusStat: "命中", note: "命中と種族対策に長ける。" }
     ],
     skills: [
-        { id: "attack", name: "たたかう", type: "active", jobId: "rookie", learnLevel: 1, note: "基本攻撃。" },
+        { id: "attack", name: "通常攻撃", type: "basic", jobId: "rookie", learnLevel: 1, note: "スキル枠を使わない基本行動。", basicAction: true },
         { id: "brace", name: "身構える", type: "active", jobId: "rookie", learnLevel: 1, note: "守りを固める。" },
         { id: "first-aid", name: "応急手当", type: "active", jobId: "rookie", learnLevel: 1, note: "軽い傷を手当てする。" },
         { id: "power-strike", name: "強打", type: "active", jobId: "fighter", learnLevel: 5, note: "力を込めた一撃。" },
@@ -114,6 +115,9 @@ const navButtons = document.querySelectorAll(".nav-button");
 let currentView = "home";
 let selectedCharacterId = "chara-01";
 let selectedPartyId = "party-01";
+let selectedCharacterTab = "basic";
+let selectedJobChangeId = "";
+let pendingEquipmentSelections = {};
 let homeDungeonSelections = {};
 let lastAdventureReport = null;
 let adventureReportsByParty = {};
@@ -123,8 +127,24 @@ let isCharacterDetailPanelOpen = false;
 let gameState = createInitialState();
 
 const byId = (collection, id) => collection.find((item) => item.id === id);
+function isLeaderCharacter(characterId) {
+    return gameData.parties.some((party) => party.leaderId === characterId);
+}
+
+function displayCharacterName(character, options = {}) {
+    if (!character) {
+        return "不明";
+    }
+
+    const leader = options.leaderId ? options.leaderId === character.id : isLeaderCharacter(character.id);
+    return leader ? `◆ ${character.name}` : character.name;
+}
+
 const namesFromIds = (collection, ids) => {
-    const names = ids.map((id) => byId(collection, id)?.name).filter(Boolean);
+    const names = ids.map((id) => {
+        const item = byId(collection, id);
+        return collection === gameData.characters && item ? displayCharacterName(item) : item?.name;
+    }).filter(Boolean);
     return names.length > 0 ? names.join("、") : "空き";
 };
 
@@ -171,14 +191,18 @@ function skillById(skillId) {
     return gameData.skills.find((skill) => skill.id === skillId);
 }
 
+function isEquippableSkill(skill) {
+    return Boolean(skill) && !skill.basicAction && !BASIC_ACTION_SKILL_IDS.includes(skill.id);
+}
+
 function defaultLearnedSkillIds() {
     return gameData.skills
-        .filter((skill) => skill.jobId === ROOKIE_JOB_ID && skill.learnLevel <= 1)
+        .filter((skill) => isEquippableSkill(skill) && skill.jobId === ROOKIE_JOB_ID && skill.learnLevel <= 1)
         .map((skill) => skill.id);
 }
 
 function uniqueSkillIds(skillIds) {
-    return [...new Set((skillIds ?? []).filter((skillId) => skillById(skillId)))];
+    return [...new Set((skillIds ?? []).filter((skillId) => isEquippableSkill(skillById(skillId))))];
 }
 
 function normalizeEquippedSkills(equippedSkills = {}, learnedSkillIds = defaultLearnedSkillIds()) {
@@ -356,6 +380,20 @@ function basicJobs() {
     return gameData.jobs.filter((job) => job.tier === "基本職");
 }
 
+function jobGuide(jobId) {
+    const guides = {
+        fighter: { role: "前衛攻撃", feature: "安定した物理火力で敵を押し切る。", stat: "攻撃", skills: ["強打", "鍛えた体"] },
+        guardian: { role: "前衛防御", feature: "守りを固め、粘り強く戦線を保つ。", stat: "防御", skills: ["盾打ち", "鉄の構え"] },
+        scout: { role: "探索補助", feature: "素早く動き、探索と先行判断を支える。", stat: "探索", skills: ["早駆け", "痕跡読み"] },
+        mage: { role: "魔法攻撃", feature: "魔力を活かして後衛から攻める。", stat: "魔力", skills: ["火花", "魔力集中"] },
+        shaman: { role: "回復支援", feature: "祈りで仲間を支え、崩れた流れを立て直す。", stat: "回復", skills: ["応急祈祷", "静かな祈り"] },
+        hunter: { role: "命中・対獣", feature: "狙いを定め、動物系の敵への対応に長ける。", stat: "命中", skills: ["狙い撃ち", "獣の目"] }
+    };
+
+    const job = byId(gameData.jobs, jobId);
+    return guides[jobId] ?? { role: job?.tier ?? "未設定", feature: job?.note ?? "詳細未設定", stat: job?.bonusStat ?? "-", skills: [] };
+}
+
 function canChangeToBasicJob(character) {
     return character.jobId === ROOKIE_JOB_ID && character.level >= 5;
 }
@@ -382,7 +420,7 @@ function skillName(skillId) {
 function learnedSkills(character, type) {
     return (character.learnedSkillIds ?? [])
         .map((skillId) => skillById(skillId))
-        .filter((skill) => skill && (!type || skill.type === type));
+        .filter((skill) => isEquippableSkill(skill) && (!type || skill.type === type));
 }
 
 function equippedSkillNames(character, type) {
@@ -394,7 +432,7 @@ function learnEligibleSkills(character) {
     normalizeSkillState(character);
     const learned = new Set(character.learnedSkillIds);
     const newlyLearned = gameData.skills.filter((skill) => {
-        return skill.jobId === character.jobId && skill.learnLevel <= character.level && !learned.has(skill.id);
+        return isEquippableSkill(skill) && skill.jobId === character.jobId && skill.learnLevel <= character.level && !learned.has(skill.id);
     });
 
     newlyLearned.forEach((skill) => character.learnedSkillIds.push(skill.id));
@@ -405,6 +443,20 @@ function learnEligibleSkills(character) {
 
 function personalityNames(ids) {
     return ids.map((id) => byId(gameData.personalities, id)?.name ?? "不明").join(" / ");
+}
+
+function personalityPhrase(ids) {
+    const names = ids.map((id) => byId(gameData.personalities, id)?.name).filter(Boolean);
+
+    if (names.length === 0) {
+        return "まだ個性が見えていない";
+    }
+
+    if (names.length === 1) {
+        return `${names[0]}な気質`;
+    }
+
+    return `${names[0]}かつ${names[1]}派`;
 }
 
 function personalityTendency(id) {
@@ -724,7 +776,13 @@ function changeEquipment(characterId, slotId, equipmentId) {
 
     normalizeEquipmentState(character);
     character.equipment[slotId] = equipmentId || "";
+    pendingEquipmentSelections[`${characterId}:${slotId}`] = equipmentId || "";
     saveState();
+    rerenderPreservingScroll();
+}
+
+function previewEquipment(characterId, slotId, equipmentId) {
+    pendingEquipmentSelections[`${characterId}:${slotId}`] = equipmentId || "";
     rerenderPreservingScroll();
 }
 
@@ -884,7 +942,7 @@ function createAdventureReport(party, dungeon, levelMessages, battleResult) {
 
     return {
         partyName: party.name,
-        leaderName: leader?.name ?? party.name,
+        leaderName: leader ? displayCharacterName(leader, { leaderId: party.leaderId }) : party.name,
         dungeonName: dungeon.name,
         experience: dungeon.reward.experience,
         mastery: dungeon.reward.mastery,
@@ -908,26 +966,29 @@ function createAdventureReport(party, dungeon, levelMessages, battleResult) {
                 logText("へ向けて街を出た。")
             ]),
             logEvent("arrive", "ダンジョン到着", {
-                actor: leader?.name ?? "リーダー",
+                actor: leader ? displayCharacterName(leader, { leaderId: party.leaderId }) : "リーダー",
                 dungeon: dungeon.name
             }, [
-                logMark("character", leader?.name ?? "リーダー"),
+                logMark("character", leader ? displayCharacterName(leader, { leaderId: party.leaderId }) : "リーダー"),
                 logText("が入口の様子を見て、進む順番を決めた。")
             ]),
             ...battleResult.steps.map((step, index) => {
                 const actor = actorForStep(index);
                 const skill = characterBattleSkill(actor);
+                const actorName = actor ? displayCharacterName(actor, { leaderId: party.leaderId }) : "仲間";
+                const isBattle = normalizeLogEvent(step).type === "battle";
                 const actorParts = [
                     logText(" "),
-                    logMark("character", actor?.name ?? "仲間"),
-                    logText("は"),
-                    ...(skill ? [logMark("skill", skill.name), logText("を構え、")] : []),
+                    logMark("character", actorName),
+                    ...(isBattle
+                        ? (skill ? [logText("は"), logMark("skill", skill.name), logText("を使った。")] : [logText("の攻撃！")])
+                        : [logText("は")]),
                     logText(`${personalityComment(actor)}。`)
                 ];
 
                 return {
                     ...normalizeLogEvent(step),
-                    actor: actor?.name ?? "仲間",
+                    actor: actorName,
                     skill: skill?.name ?? "",
                     parts: [...(step.parts ?? [logText(step.text)]), ...actorParts],
                     text: [...(step.parts ?? [logText(step.text)]), ...actorParts].map((part) => part.text).join("")
@@ -1108,6 +1169,7 @@ function changeJob(characterId, jobId) {
     character.jobId = jobId;
     character.jobMastery = normalizeMastery(character.jobMastery);
     const newSkills = learnEligibleSkills(character);
+    selectedJobChangeId = "";
 
     addLog(`${character.name}が${previousJobName}から${targetJob.name}へ転職しました。${newSkills.length > 0 ? ` スキル習得: ${newSkills.map((skill) => skill.name).join("、")}` : ""}`);
     saveState();
@@ -1226,7 +1288,7 @@ function renderHomePartyCard(party) {
             <details class="party-extra-details">
                 <summary>詳細</summary>
                 <dl class="compact-detail-list">
-                    <div><dt>リーダー</dt><dd>${leader?.name ?? "未設定"}</dd></div>
+                    <div><dt>リーダー</dt><dd>${leader ? displayCharacterName(leader, { leaderId: party.leaderId }) : "未設定"}</dd></div>
                     <div><dt>方針</dt><dd>${partyPolicy(party)}</dd></div>
                     <div><dt>現在地</dt><dd>${dungeon ? dungeon.name : "街"}</dd></div>
                     <div><dt>メンバー</dt><dd>${namesFromIds(gameData.characters, party.memberIds)}</dd></div>
@@ -1357,10 +1419,10 @@ function renderCharacterListCard(character) {
     return `
         <article class="card ${selected}">
             <div class="card-title-row">
-                <h3>${character.name}</h3>
+                <h3>${displayCharacterName(character)}</h3>
                 <span class="tag">Lv${character.level}</span>
             </div>
-            <p>${jobName(character.jobId)} / ${personalityNames(character.personalities)}</p>
+            <p>${jobName(character.jobId)} / ${personalityPhrase(character.personalities)}</p>
             <button class="secondary-button" type="button" data-action="select-character" data-character-id="${character.id}">詳細を見る</button>
         </article>
     `;
@@ -1370,39 +1432,79 @@ function renderCharacterDetail(character, options = {}) {
     const party = partyForCharacter(character.id);
     normalizeSkillState(character);
     const panelClass = options.mobile ? "mobile-detail-card" : "detail-panel";
+    const tab = selectedCharacterTab;
 
     return `
         <article class="wide-card ${panelClass}">
             <div class="card-title-row">
                 <div>
                     <p class="eyebrow">Character Detail</p>
-                    <h3>${character.name}</h3>
+                    <h3>${displayCharacterName(character)}</h3>
                 </div>
                 <div class="title-actions">
                     <span class="tag">Lv${character.level}</span>
                     ${options.mobile ? `<button class="secondary-button close-button" type="button" data-action="close-character-detail">閉じる</button>` : ""}
                 </div>
             </div>
+            <div class="character-tabs" role="tablist">
+                ${[
+                    ["basic", "基本"],
+                    ["equipment", "装備"],
+                    ["skills", "スキル"],
+                    ["growth", "成長"]
+                ].map(([tabId, label]) => `
+                    <button class="tab-button ${tab === tabId ? "active" : ""}" type="button" data-action="select-character-tab" data-tab="${tabId}">${label}</button>
+                `).join("")}
+            </div>
+            <div class="character-tab-body">
+                ${tab === "basic" ? renderCharacterBasicTab(character, party) : ""}
+                ${tab === "equipment" ? renderEquipmentPanel(character) : ""}
+                ${tab === "skills" ? renderSkillPanel(character) : ""}
+                ${tab === "growth" ? renderCharacterGrowthTab(character) : ""}
+            </div>
+        </article>
+    `;
+}
+
+function renderCharacterBasicTab(character, party) {
+    return `
+        <section>
             <dl class="detail-list two-column">
                 <div><dt>経験値</dt><dd>${character.experience} / ${expToNextLevel(character.level)}</dd></div>
                 <div><dt>累計経験値</dt><dd>${character.totalExperience}</dd></div>
                 <div><dt>職業</dt><dd>${jobName(character.jobId)}</dd></div>
                 <div><dt>職業区分</dt><dd>${byId(gameData.jobs, character.jobId)?.tier ?? "不明"}</dd></div>
                 <div><dt>所属パーティ</dt><dd>${party ? party.name : "未所属"}</dd></div>
-                <div><dt>性格1</dt><dd>${byId(gameData.personalities, character.personalities[0])?.name ?? "未設定"}</dd></div>
-                <div><dt>性格2</dt><dd>${byId(gameData.personalities, character.personalities[1])?.name ?? "未設定"}</dd></div>
+                <div><dt>性格</dt><dd>${personalityPhrase(character.personalities)}</dd></div>
+                <div><dt>基本行動</dt><dd>${displayCharacterName(character)}の攻撃！</dd></div>
             </dl>
+        </section>
+    `;
+}
+
+function renderCharacterGrowthTab(character) {
+    return `
+        <section>
             ${renderJobChangePanel(character)}
+            ${renderMasteryPanel(character)}
+        </section>
+    `;
+}
+
+function renderMasteryPanel(character) {
+    const visibleJobs = gameData.jobs
+        .map((job) => ({ job, value: masteryValue(character, job.id) }))
+        .filter(({ value }) => value > 0);
+
+    return `
+        <section class="mastery-panel">
             <h3 class="subheading">職業熟練度</h3>
-            <dl class="detail-list two-column">
-                ${gameData.jobs.map((job) => {
-                    const value = masteryValue(character, job.id);
-                    return `<div><dt>${job.name}</dt><dd>${value} / ${masteryBonusText(job.id, value)}</dd></div>`;
-                }).join("")}
-            </dl>
-            ${renderSkillPanel(character)}
-            ${renderEquipmentPanel(character)}
-        </article>
+            ${visibleJobs.length > 0 ? `
+                <dl class="detail-list two-column">
+                    ${visibleJobs.map(({ job, value }) => `<div><dt>${job.name}</dt><dd>${value} / ${masteryBonusText(job.id, value)}</dd></div>`).join("")}
+                </dl>
+            ` : `<p class="notice">熟練度1以上の職業はまだありません。</p>`}
+        </section>
     `;
 }
 
@@ -1427,19 +1529,88 @@ function renderEquipmentPanel(character) {
 
 function renderEquipmentSelect(character, slot) {
     const currentId = character.equipment[slot.id] ?? "";
+    const pendingId = pendingEquipmentSelections[`${character.id}:${slot.id}`] ?? currentId;
     const options = gameState.inventory.equipment.filter((equipment) => {
         const owner = equippedBy(equipment.id);
         return equipment.type === slot.type && (!owner || owner.id === character.id);
     });
+    const currentEquipment = gameState.inventory.equipment.find((equipment) => equipment.id === currentId) ?? null;
+    const pendingEquipment = gameState.inventory.equipment.find((equipment) => equipment.id === pendingId) ?? null;
 
     return `
-        <label>
-            ${slot.label}
-            <select data-action="change-equipment" data-character-id="${character.id}" data-equipment-slot="${slot.id}">
-                <option value="">未装備</option>
-                ${options.map((equipment) => `<option value="${equipment.id}" ${currentId === equipment.id ? "selected" : ""}>${equipment.protected ? "★ " : ""}${equipment.name}</option>`).join("")}
-            </select>
-        </label>
+        <section class="equipment-compare-card">
+            <label>
+                ${slot.label}
+                <select data-action="preview-equipment" data-character-id="${character.id}" data-equipment-slot="${slot.id}">
+                    <option value="">未装備</option>
+                    ${options.map((equipment) => `<option value="${equipment.id}" ${pendingId === equipment.id ? "selected" : ""}>${equipment.protected ? "★ " : ""}${equipment.name}</option>`).join("")}
+                </select>
+            </label>
+            ${renderEquipmentComparison(currentEquipment, pendingEquipment)}
+            <button class="primary-button" type="button" data-action="apply-equipment" data-character-id="${character.id}" data-equipment-slot="${slot.id}" ${currentId === pendingId ? "disabled" : ""}>この装備に変更</button>
+        </section>
+    `;
+}
+
+function equipmentStatValue(equipment, stat) {
+    if (!equipment) {
+        return stat === "attacks" ? 0 : 0;
+    }
+
+    return Number(equipment[stat]) || 0;
+}
+
+function equipmentWord(equipment) {
+    return equipment?.affix ? `${equipment.affix.name}（${equipment.affix.note}）` : "なし";
+}
+
+function equipmentName(equipment) {
+    return equipment ? equipment.name : "未装備";
+}
+
+function renderEquipmentComparison(currentEquipment, pendingEquipment) {
+    const stats = [
+        ["attack", "攻撃"],
+        ["defense", "防御"],
+        ["magic", "魔力"],
+        ["accuracy", "命中"],
+        ["attacks", "攻撃回数"]
+    ];
+
+    return `
+        <div class="equipment-comparison">
+            <div>
+                <h4>現在装備</h4>
+                ${renderEquipmentCompareSummary(currentEquipment)}
+            </div>
+            <div>
+                <h4>変更予定装備</h4>
+                ${renderEquipmentCompareSummary(pendingEquipment)}
+            </div>
+            <dl class="stat-diff-list">
+                ${stats.map(([stat, label]) => {
+                    const diff = equipmentStatValue(pendingEquipment, stat) - equipmentStatValue(currentEquipment, stat);
+                    const className = diff > 0 ? "diff-plus" : diff < 0 ? "diff-minus" : "diff-even";
+                    const sign = diff > 0 ? "+" : "";
+                    return `<div><dt>${label}</dt><dd class="${className}">${sign}${diff}</dd></div>`;
+                }).join("")}
+            </dl>
+        </div>
+    `;
+}
+
+function renderEquipmentCompareSummary(equipment) {
+    return `
+        <dl class="detail-list compact-detail-list">
+            <div><dt>名前</dt><dd>${equipmentName(equipment)}</dd></div>
+            <div><dt>攻撃</dt><dd>${equipmentStatValue(equipment, "attack")}</dd></div>
+            <div><dt>防御</dt><dd>${equipmentStatValue(equipment, "defense")}</dd></div>
+            <div><dt>魔力</dt><dd>${equipmentStatValue(equipment, "magic")}</dd></div>
+            <div><dt>命中</dt><dd>${equipmentStatValue(equipment, "accuracy")}</dd></div>
+            <div><dt>攻撃回数</dt><dd>${equipmentStatValue(equipment, "attacks")}</dd></div>
+            <div><dt>属性</dt><dd>${equipment?.element ?? "-"}</dd></div>
+            <div><dt>ワード</dt><dd>${equipmentWord(equipment)}</dd></div>
+        </dl>
     `;
 }
 
@@ -1503,6 +1674,10 @@ function renderSkillSlotSelect(character, type, slotIndex) {
 }
 
 function renderJobChangePanel(character) {
+    const selectedJobId = selectedJobChangeId || basicJobs()[0]?.id || "";
+    const selectedJob = byId(gameData.jobs, selectedJobId);
+    const guide = jobGuide(selectedJobId);
+
     if (character.jobId !== ROOKIE_JOB_ID) {
         return `
             <section class="job-change-panel">
@@ -1521,12 +1696,21 @@ function renderJobChangePanel(character) {
             <div class="form-grid">
                 <label>
                     転職先
-                    <select id="jobChangeSelect" ${canChange ? "" : "disabled"}>
-                        ${basicJobs().map((job) => `<option value="${job.id}">${job.name}</option>`).join("")}
+                    <select id="jobChangeSelect" data-action="preview-job-change" ${canChange ? "" : "disabled"}>
+                        ${basicJobs().map((job) => `<option value="${job.id}" ${selectedJobId === job.id ? "selected" : ""}>${job.name}</option>`).join("")}
                     </select>
                 </label>
                 <button class="primary-button" type="button" data-action="change-job" data-character-id="${character.id}" ${canChange ? "" : "disabled"}>転職する</button>
             </div>
+            <section class="job-guide-card">
+                <h4>${selectedJob?.name ?? "未選択"}</h4>
+                <dl class="detail-list two-column">
+                    <div><dt>役割</dt><dd>${guide.role}</dd></div>
+                    <div><dt>得意能力</dt><dd>${guide.stat}</dd></div>
+                    <div><dt>特徴</dt><dd>${guide.feature}</dd></div>
+                    <div><dt>代表スキル</dt><dd>${guide.skills.length > 0 ? guide.skills.join("、") : "未設定"}</dd></div>
+                </dl>
+            </section>
         </section>
     `;
 }
@@ -1559,17 +1743,17 @@ function renderPartyCard(party) {
         <article class="wide-card ${party.id === selectedPartyId ? "selected-card" : ""}">
             <div class="card-title-row">
                 <h3>${party.name}</h3>
-                <span class="tag">${status}</span>
+                <span class="tag" data-adventure-status="${party.id}">${status}</span>
             </div>
             <dl class="detail-list two-column">
-                <div><dt>リーダー</dt><dd>${leader?.name ?? "未設定"}</dd></div>
+                <div><dt>リーダー</dt><dd>${leader ? displayCharacterName(leader, { leaderId: party.leaderId }) : "未設定"}</dd></div>
                 <div><dt>方針</dt><dd>${partyPolicy(party)}</dd></div>
                 <div><dt>神器</dt><dd>${party.artifact}</dd></div>
                 <div><dt>人数</dt><dd>${party.memberIds.length} / 6</dd></div>
                 <div><dt>前衛</dt><dd>${namesFromIds(gameData.characters, party.formation.front)}</dd></div>
                 <div><dt>後衛</dt><dd>${namesFromIds(gameData.characters, party.formation.back)}</dd></div>
                 <div><dt>現在地</dt><dd>${dungeon ? dungeon.name : "街"}</dd></div>
-                <div><dt>残り時間</dt><dd>${adventure ? remainingTimeText(adventure.returnAt) : "-"}</dd></div>
+                <div><dt>残り時間</dt><dd ${adventure ? `data-countdown-return-at="${adventure.returnAt}" data-party-id="${party.id}"` : ""}>${adventure ? remainingTimeText(adventure.returnAt) : "-"}</dd></div>
             </dl>
             <button class="secondary-button full-button" type="button" data-action="select-party" data-party-id="${party.id}">詳細・編成</button>
         </article>
@@ -1592,8 +1776,8 @@ function renderPartyDetail(party) {
             <dl class="detail-list two-column">
                 <div><dt>最大人数</dt><dd>${party.memberIds.length} / 6</dd></div>
                 <div><dt>方針</dt><dd>${partyPolicy(party)}</dd></div>
-                <div><dt>リーダー</dt><dd>${leader?.name ?? "未設定"}</dd></div>
-                <div><dt>リーダー性格</dt><dd>${leader ? personalityNames(leader.personalities) : "未設定"}</dd></div>
+                <div><dt>リーダー</dt><dd>${leader ? displayCharacterName(leader, { leaderId: party.leaderId }) : "未設定"}</dd></div>
+                <div><dt>リーダー性格</dt><dd>${leader ? personalityPhrase(leader.personalities) : "未設定"}</dd></div>
             </dl>
             ${busy ? `<p class="notice">このパーティは冒険中です。帰還後に報酬を受け取るまで編成変更できません。</p>` : ""}
             <h3 class="subheading">リーダー指定</h3>
@@ -1602,7 +1786,7 @@ function renderPartyDetail(party) {
                 <select data-action="change-leader" data-party-id="${party.id}" ${busy ? "disabled" : ""}>
                     ${party.memberIds.map((characterId) => {
                         const character = byId(gameData.characters, characterId);
-                        return `<option value="${characterId}" ${party.leaderId === characterId ? "selected" : ""}>${character?.name ?? "不明"}</option>`;
+                        return `<option value="${characterId}" ${party.leaderId === characterId ? "selected" : ""}>${character ? displayCharacterName(character, { leaderId: party.leaderId }) : "不明"}</option>`;
                     }).join("")}
                 </select>
             </label>
@@ -1638,7 +1822,7 @@ function renderFormationSelect(party, line, slotIndex, busy) {
                 ${gameData.characters.map((character) => {
                     const disabled = selectedIds.includes(character.id) ? "disabled" : "";
                     const selected = currentId === character.id ? "selected" : "";
-                    return `<option value="${character.id}" ${selected} ${disabled}>${character.name}</option>`;
+                    return `<option value="${character.id}" ${selected} ${disabled}>${displayCharacterName(character, { leaderId: party.leaderId })}</option>`;
                 }).join("")}
             </select>
         </label>
@@ -1724,15 +1908,15 @@ function renderAdventureStatusCards() {
             <article class="wide-card">
                 <div class="card-title-row">
                     <h3>${party.name} / ${dungeon.name}</h3>
-                    <span class="tag">${returned ? "帰還済み" : "冒険中"}</span>
+                    <span class="tag" data-adventure-status="${adventure.partyId}">${returned ? "帰還済み" : "冒険中"}</span>
                 </div>
                 <dl class="detail-list two-column">
                     <div><dt>出発</dt><dd>${new Date(adventure.departedAt).toLocaleTimeString("ja-JP")}</dd></div>
                     <div><dt>帰還予定</dt><dd>${new Date(adventure.returnAt).toLocaleTimeString("ja-JP")}</dd></div>
-                    <div><dt>残り時間</dt><dd>${remainingTimeText(adventure.returnAt)}</dd></div>
+                    <div><dt>残り時間</dt><dd data-countdown-return-at="${adventure.returnAt}" data-party-id="${adventure.partyId}">${remainingTimeText(adventure.returnAt)}</dd></div>
                     <div><dt>予定報酬</dt><dd>経験値${dungeon.reward.experience} / 熟練度${dungeon.reward.mastery} / ${dungeon.reward.gold}G</dd></div>
                 </dl>
-                ${returned ? `<button class="primary-button reward-button" type="button" data-action="claim-reward" data-adventure-id="${adventure.id}">報酬を受け取る</button>` : ""}
+                <button class="primary-button reward-button ${returned ? "" : "is-hidden"}" type="button" data-action="claim-reward" data-adventure-id="${adventure.id}" data-adventure-claim="${adventure.partyId}">報酬を受け取る</button>
             </article>
         `;
     }).join("");
@@ -1943,8 +2127,10 @@ function updateTimers() {
         timerElement.textContent = returned ? "帰還済み" : remainingTimeText(returnAt);
 
         const statusElement = document.querySelector(`[data-home-party-status="${partyId}"]`);
+        const adventureStatusElements = document.querySelectorAll(`[data-adventure-status="${partyId}"]`);
         const noteElement = document.querySelector(`[data-home-adventure-note="${partyId}"]`);
         const claimButton = document.querySelector(`[data-claim-button-party-id="${partyId}"]`);
+        const adventureClaimButton = document.querySelector(`[data-adventure-claim="${partyId}"]`);
         const adventure = partyAdventure(partyId);
         const dungeon = adventure ? byId(gameData.dungeons, adventure.dungeonId) : null;
 
@@ -1952,12 +2138,20 @@ function updateTimers() {
             statusElement.textContent = returned ? "帰還済み" : "冒険中";
         }
 
+        adventureStatusElements.forEach((element) => {
+            element.textContent = returned ? "帰還済み" : "冒険中";
+        });
+
         if (returned && noteElement && dungeon) {
             noteElement.textContent = `${dungeon.name}の報酬を受け取れます。`;
         }
 
         if (claimButton) {
             claimButton.classList.toggle("is-hidden", !returned);
+        }
+
+        if (adventureClaimButton) {
+            adventureClaimButton.classList.toggle("is-hidden", !returned);
         }
     });
 }
@@ -1997,7 +2191,13 @@ app.addEventListener("click", (event) => {
 
     if (actionButton.dataset.action === "select-character") {
         selectedCharacterId = actionButton.dataset.characterId;
+        selectedCharacterTab = "basic";
         isCharacterDetailPanelOpen = isMobileView();
+        renderCurrentView();
+    }
+
+    if (actionButton.dataset.action === "select-character-tab") {
+        selectedCharacterTab = actionButton.dataset.tab ?? "basic";
         renderCurrentView();
     }
 
@@ -2017,6 +2217,11 @@ app.addEventListener("click", (event) => {
         if (jobId) {
             changeJob(actionButton.dataset.characterId, jobId);
         }
+    }
+
+    if (actionButton.dataset.action === "apply-equipment") {
+        const key = `${actionButton.dataset.characterId}:${actionButton.dataset.equipmentSlot}`;
+        changeEquipment(actionButton.dataset.characterId, actionButton.dataset.equipmentSlot, pendingEquipmentSelections[key] ?? "");
     }
 
     if (actionButton.dataset.action === "toggle-protect") {
@@ -2092,12 +2297,17 @@ app.addEventListener("change", (event) => {
         homeDungeonSelections[control.dataset.partyId] = control.value;
     }
 
+    if (control.dataset.action === "preview-job-change") {
+        selectedJobChangeId = control.value;
+        renderCurrentView();
+    }
+
     if (control.dataset.action === "change-skill") {
         changeSkill(control.dataset.characterId, control.dataset.skillType, control.dataset.slot, control.value);
     }
 
-    if (control.dataset.action === "change-equipment") {
-        changeEquipment(control.dataset.characterId, control.dataset.equipmentSlot, control.value);
+    if (control.dataset.action === "preview-equipment") {
+        previewEquipment(control.dataset.characterId, control.dataset.equipmentSlot, control.value);
     }
 });
 
@@ -2119,12 +2329,5 @@ if (typeof window !== "undefined") {
 }
 
 setInterval(() => {
-    if (currentView === "home") {
-        updateTimers();
-        return;
-    }
-
-    if (currentView === "parties" || currentView === "adventure") {
-        renderCurrentView();
-    }
+    updateTimers();
 }, 1000);
