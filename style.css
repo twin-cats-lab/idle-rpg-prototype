@@ -311,6 +311,35 @@ p {
     margin-bottom: 0;
 }
 
+.journal-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.journal-meta div {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 6px 9px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.journal-meta dt {
+    color: var(--muted);
+    font-size: 0.76rem;
+}
+
+.journal-meta dd {
+    margin: 0;
+    font-weight: 800;
+}
+
+.journal-open-row {
+    display: grid;
+    margin-top: 4px;
+}
+
 .icon-like-button {
     min-height: 40px;
     padding: 8px 12px;

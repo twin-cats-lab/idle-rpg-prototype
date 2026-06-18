@@ -933,7 +933,7 @@ function characterBattleSkill(character) {
     return skillId ? byId(gameData.skills, skillId) : null;
 }
 
-function createAdventureReport(party, dungeon, levelMessages, battleResult) {
+function createAdventureReport(party, dungeon, levelMessages, battleResult, adventure = {}) {
     const leader = byId(gameData.characters, party.leaderId) ?? byId(gameData.characters, party.memberIds[0]);
     const members = party.memberIds.map((id) => byId(gameData.characters, id)).filter(Boolean);
     const roomActors = [leader, ...members.filter((member) => member.id !== leader?.id)];
@@ -944,6 +944,9 @@ function createAdventureReport(party, dungeon, levelMessages, battleResult) {
         partyName: party.name,
         leaderName: leader ? displayCharacterName(leader, { leaderId: party.leaderId }) : party.name,
         dungeonName: dungeon.name,
+        departedAt: adventure.departedAt ?? Date.now() - dungeon.durationSeconds * 1000,
+        returnedAt: Date.now(),
+        durationSeconds: Math.max(0, Math.round(((Date.now()) - (adventure.departedAt ?? Date.now())) / 1000)),
         experience: dungeon.reward.experience,
         mastery: dungeon.reward.mastery,
         gold: dungeon.reward.gold,
@@ -1097,7 +1100,7 @@ function claimReward(adventureId) {
     gameState.adventures = gameState.adventures.filter((item) => item.id !== adventureId);
 
     const rewardMessage = `${partyLogName(party)}が${dungeon.name}から帰還。経験値${dungeon.reward.experience}、熟練度${dungeon.reward.mastery}、${dungeon.reward.gold}Gを獲得しました。`;
-    lastAdventureReport = createAdventureReport(party, dungeon, levelMessages, battleResult);
+    lastAdventureReport = createAdventureReport(party, dungeon, levelMessages, battleResult, adventure);
     adventureReportsByParty[party.id] = lastAdventureReport;
     activeAdventureReportPartyId = party.id;
     const growthMessages = [
@@ -1285,6 +1288,7 @@ function renderHomePartyCard(party) {
                 </div>
             </div>
             ${adventure ? renderHomeAdventureAction(adventure, dungeon) : renderHomeDepartAction(party, canDepart)}
+            ${renderHomeJournalAction(party)}
             <details class="party-extra-details">
                 <summary>詳細</summary>
                 <dl class="compact-detail-list">
@@ -1295,6 +1299,20 @@ function renderHomePartyCard(party) {
                 </dl>
             </details>
         </article>
+    `;
+}
+
+function renderHomeJournalAction(party) {
+    const report = adventureReportsByParty[party.id];
+
+    if (!report) {
+        return "";
+    }
+
+    return `
+        <div class="journal-open-row">
+            <button class="secondary-button touch-button" type="button" data-action="open-report-sheet" data-party-id="${party.id}">冒険日誌を開く</button>
+        </div>
     `;
 }
 
@@ -1339,16 +1357,26 @@ function renderAdventureReportSheet() {
     const currentStep = report.steps[report.currentStep] ?? report.steps[0];
     const isComplete = report.currentStep >= report.steps.length - 1;
     const partyId = activeAdventureReportPartyId;
+    const leaderName = report.leaderName ?? "◆ リーダー";
+    const duration = report.durationSeconds ? formatDuration(report.durationSeconds) : "-";
+    const resultButton = report.showResult
+        ? `<button class="primary-button touch-button" type="button" data-action="show-report-log" data-party-id="${partyId}">ログへ戻る</button>`
+        : `<button class="primary-button touch-button" type="button" data-action="show-report-result" data-party-id="${partyId}">結果を見る</button>`;
 
     return `
-        <div class="adventure-report-overlay" role="dialog" aria-modal="true" aria-label="冒険ログ">
-            <button class="report-backdrop" type="button" data-action="close-report-sheet" aria-label="冒険ログを閉じる"></button>
+        <div class="adventure-report-overlay" role="dialog" aria-modal="true" aria-label="冒険日誌">
+            <button class="report-backdrop" type="button" data-action="close-report-sheet" aria-label="冒険日誌を閉じる"></button>
             <section class="adventure-report-panel">
                 <div class="report-sheet-header">
                     <div>
-                        <p class="eyebrow">Return Report</p>
-                        <h2>${report.partyName}</h2>
-                        <p>${report.dungeonName}</p>
+                        <p class="eyebrow">Adventure Journal</p>
+                        <h2>${report.partyName}　${leaderName}</h2>
+                        <p>${report.dungeonName}　探索結果</p>
+                        <dl class="journal-meta">
+                            <div><dt>探索時間</dt><dd>${duration}</dd></div>
+                            <div><dt>獲得EXP</dt><dd>${report.experience}</dd></div>
+                            <div><dt>獲得G</dt><dd>${report.gold}G</dd></div>
+                        </dl>
                     </div>
                     <button class="secondary-button icon-like-button" type="button" data-action="close-report-sheet">閉じる</button>
                 </div>
@@ -1360,7 +1388,7 @@ function renderAdventureReportSheet() {
                     <div class="report-actions">
                         <button class="secondary-button touch-button" type="button" data-action="prev-report-step" data-party-id="${partyId}" ${report.currentStep === 0 ? "disabled" : ""}>前へ</button>
                         <button class="secondary-button touch-button" type="button" data-action="next-report-step" data-party-id="${partyId}" ${isComplete ? "disabled" : ""}>次へ</button>
-                        <button class="primary-button touch-button" type="button" data-action="show-report-result" data-party-id="${partyId}">結果を見る</button>
+                        ${resultButton}
                     </div>
                 </div>
             </section>
@@ -2242,6 +2270,15 @@ app.addEventListener("click", (event) => {
         sellUnprotectedEquipment();
     }
 
+    if (actionButton.dataset.action === "open-report-sheet") {
+        const report = adventureReportsByParty[actionButton.dataset.partyId];
+        if (!report) {
+            return;
+        }
+        activeAdventureReportPartyId = actionButton.dataset.partyId;
+        renderCurrentView();
+    }
+
     if (actionButton.dataset.action === "next-report-step") {
         const report = adventureReportsByParty[actionButton.dataset.partyId];
         if (!report) {
@@ -2269,6 +2306,15 @@ app.addEventListener("click", (event) => {
         }
         report.showResult = true;
         report.currentStep = report.steps.length - 1;
+        renderCurrentView();
+    }
+
+    if (actionButton.dataset.action === "show-report-log") {
+        const report = adventureReportsByParty[actionButton.dataset.partyId];
+        if (!report) {
+            return;
+        }
+        report.showResult = false;
         renderCurrentView();
     }
 
