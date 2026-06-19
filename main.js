@@ -1360,7 +1360,7 @@ function renderAdventureReportSheet() {
     const leaderName = report.leaderName ?? "◆ リーダー";
     const duration = report.durationSeconds ? formatDuration(report.durationSeconds) : "-";
     const resultButton = report.showResult
-        ? `<button class="primary-button touch-button" type="button" data-action="show-report-log" data-party-id="${partyId}">ログへ戻る</button>`
+        ? `<button class="primary-button touch-button" type="button" data-action="close-report-sheet">閉じる</button>`
         : `<button class="primary-button touch-button" type="button" data-action="show-report-result" data-party-id="${partyId}">結果を見る</button>`;
 
     return `
@@ -2306,15 +2306,6 @@ app.addEventListener("click", (event) => {
         }
         report.showResult = true;
         report.currentStep = report.steps.length - 1;
-        renderCurrentView();
-    }
-
-    if (actionButton.dataset.action === "show-report-log") {
-        const report = adventureReportsByParty[actionButton.dataset.partyId];
-        if (!report) {
-            return;
-        }
-        report.showResult = false;
         renderCurrentView();
     }
 
