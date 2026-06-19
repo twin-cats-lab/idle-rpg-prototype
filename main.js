@@ -42,7 +42,7 @@ const gameData = {
         { id: "kind", name: "世話焼き", tendency: "支援" }
     ],
     characters: [
-        { id: "chara-01", name: "ミナ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["diligent", "kind"], position: "前衛" },
+        { id: "chara-01", name: "ミナ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["diligent", "kind"], position: "前衛", portrait: "assets/portraits/chara_test_Sword_Woman1_512x768_transparent.webp" },
         { id: "chara-02", name: "トウマ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["bold", "curious"], position: "前衛" },
         { id: "chara-03", name: "セリカ", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["careful", "diligent"], position: "後衛" },
         { id: "chara-04", name: "レン", level: 1, experience: 0, totalExperience: 0, jobId: "rookie", jobMastery: {}, personalities: ["curious", "careful"], position: "前衛" },
@@ -790,7 +790,7 @@ function previewEquipment(characterId, slotId, equipmentId) {
 function captureScrollState() {
     return {
         windowY: typeof window !== "undefined" ? window.scrollY : 0,
-        sheetTop: document.querySelector(".mobile-detail-sheet")?.scrollTop ?? 0
+        detailBodyTop: document.querySelector(".mobile-detail-card .character-tab-body")?.scrollTop ?? 0
     };
 }
 
@@ -800,9 +800,9 @@ function restoreScrollState(scrollState) {
             window.scrollTo(0, scrollState.windowY);
         }
 
-        const sheet = document.querySelector(".mobile-detail-sheet");
-        if (sheet) {
-            sheet.scrollTop = scrollState.sheetTop;
+        const detailBody = document.querySelector(".mobile-detail-card .character-tab-body");
+        if (detailBody) {
+            detailBody.scrollTop = scrollState.detailBodyTop;
         }
     };
 
@@ -1461,10 +1461,13 @@ function renderCharacterDetail(character, options = {}) {
     const party = partyForCharacter(character.id);
     normalizeSkillState(character);
     const panelClass = options.mobile ? "mobile-detail-card" : "detail-panel";
+    const portraitEnabled = Boolean(options.mobile && character.portrait);
+    const portraitClass = portraitEnabled ? " character-portrait-bg-enabled" : "";
+    const portraitStyle = portraitEnabled ? ` style="--character-portrait-image: url('${character.portrait}');"` : "";
     const tab = selectedCharacterTab;
 
     return `
-        <article class="wide-card ${panelClass}">
+        <article class="wide-card ${panelClass}${portraitClass}"${portraitStyle}>
             <div class="card-title-row">
                 <div>
                     <p class="eyebrow">Character Detail</p>
