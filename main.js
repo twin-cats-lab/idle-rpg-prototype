@@ -124,6 +124,7 @@ let adventureReportsByParty = {};
 let activeAdventureReportPartyId = null;
 let sellConfirmOpen = false;
 let isCharacterDetailPanelOpen = false;
+let lockedBodyScrollY = 0;
 let gameState = createInitialState();
 
 const byId = (collection, id) => collection.find((item) => item.id === id);
@@ -2136,10 +2137,40 @@ function switchView(viewName) {
 function renderCurrentView() {
     renderers[currentView]();
     app.innerHTML += renderAdventureReportSheet();
+    syncCharacterModalScrollLock();
 }
 
 function isMobileView() {
     return typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+}
+
+function shouldLockCharacterModalScroll() {
+    return currentView === "characters" && isCharacterDetailPanelOpen && isMobileView();
+}
+
+function syncCharacterModalScrollLock() {
+    if (typeof document === "undefined" || !document.body) {
+        return;
+    }
+
+    const shouldLock = shouldLockCharacterModalScroll();
+    const isLocked = document.body.classList.contains("modal-scroll-locked");
+
+    if (shouldLock && !isLocked) {
+        lockedBodyScrollY = window.scrollY || window.pageYOffset || 0;
+        document.body.classList.add("modal-scroll-locked");
+        document.body.style.top = `-${lockedBodyScrollY}px`;
+        return;
+    }
+
+    if (!shouldLock && isLocked) {
+        document.body.classList.remove("modal-scroll-locked");
+        document.body.style.top = "";
+        if (typeof window.scrollTo === "function") {
+            window.scrollTo(0, lockedBodyScrollY);
+        }
+        lockedBodyScrollY = 0;
+    }
 }
 
 function updateTimers() {

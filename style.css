@@ -23,6 +23,15 @@ body {
     font-family: "Segoe UI", "Yu Gothic UI", "Hiragino Kaku Gothic ProN", sans-serif;
 }
 
+body.modal-scroll-locked {
+    position: fixed;
+    right: 0;
+    left: 0;
+    width: 100%;
+    overflow: hidden;
+    touch-action: none;
+}
+
 .app-header,
 .main-nav,
 .app-shell {
@@ -550,6 +559,25 @@ p {
     gap: 14px;
 }
 
+.mobile-detail-card .character-tab-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 22px;
+}
+
+.mobile-detail-card .character-tab-body::after {
+    content: "ここまで";
+    display: block;
+    border-top: 1px solid var(--line);
+    margin-top: 18px;
+    padding-top: 10px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    text-align: center;
+}
+
 .title-actions {
     display: flex;
     align-items: center;
@@ -561,6 +589,7 @@ p {
     inset: 0;
     z-index: 20;
     display: none;
+    overscroll-behavior: contain;
 }
 
 .mobile-detail-backdrop {
@@ -575,11 +604,16 @@ p {
     bottom: 0;
     left: 0;
     max-height: 88vh;
-    overflow: auto;
+    overflow: hidden;
     padding: 12px;
+    overscroll-behavior: contain;
 }
 
 .mobile-detail-card {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    max-height: calc(88vh - 24px);
+    overflow: hidden;
     border-radius: 12px 12px 0 0;
 }
 
