@@ -1461,7 +1461,7 @@ function renderCharacterDetail(character, options = {}) {
     const party = partyForCharacter(character.id);
     normalizeSkillState(character);
     const panelClass = options.mobile ? "mobile-detail-card" : "detail-panel";
-    const portraitEnabled = Boolean(options.mobile && character.portrait);
+    const portraitEnabled = Boolean(character.portrait);
     const portraitClass = portraitEnabled ? " character-portrait-bg-enabled" : "";
     const portraitStyle = portraitEnabled ? ` style="--character-portrait-image: url('${character.portrait}');"` : "";
     const tab = selectedCharacterTab;

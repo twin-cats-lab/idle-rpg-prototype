@@ -619,6 +619,10 @@ p {
 
 /* Character portrait background test: remove this class or a character's portrait to disable. */
 .character-portrait-bg-enabled {
+    --portrait-opacity: 0.15;
+    --portrait-right: -3%;
+    --portrait-bottom: -2%;
+    --portrait-width: min(48%, 300px);
     position: relative;
     isolation: isolate;
     overflow: hidden;
@@ -627,17 +631,19 @@ p {
 .character-portrait-bg-enabled::before {
     position: absolute;
     z-index: 0;
-    right: -4%;
-    bottom: -2%;
-    width: min(76%, 380px);
+    right: var(--portrait-right);
+    bottom: var(--portrait-bottom);
+    width: var(--portrait-width);
     height: 100%;
     content: "";
     pointer-events: none;
-    opacity: 0.14;
+    opacity: var(--portrait-opacity);
     background-image: var(--character-portrait-image);
     background-repeat: no-repeat;
     background-position: right bottom;
     background-size: contain;
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.18) 36%, #000 72%);
+    mask-image: linear-gradient(to right, transparent 0%, rgba(0, 0, 0, 0.18) 36%, #000 72%);
 }
 
 .character-portrait-bg-enabled > * {
@@ -1226,6 +1232,13 @@ th {
 
     .mobile-detail-sheet .wide-card {
         padding: 16px;
+    }
+
+    .character-portrait-bg-enabled {
+        --portrait-opacity: 0.08;
+        --portrait-right: -10%;
+        --portrait-bottom: -3%;
+        --portrait-width: 74%;
     }
 
     .title-actions {
